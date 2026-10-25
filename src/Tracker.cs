@@ -183,15 +183,11 @@ namespace Harbor
                 if (aumid == null) return true;
             }
             var w = new WinInfo { Hwnd = h, Pid = pid, Exe = pi.Exe, Aumid = aumid };
-            if (aumid == null)
-            {
-                // a browser window that is really an installed web app (Netflix, YouTube...) carries its own
-                // app id, name and icon — exactly what the Windows taskbar uses to show it separately
-                var web = WebApp(h);
-                if (web != null) { w.Aumid = aumid = web[0]; w.WebAppName = web[1]; w.WebAppIcon = web[2]; }
-            }
+            // a browser window that is really an installed web app (Netflix, YouTube...) carries its own
+            // app id, name and icon — exactly what the Windows taskbar uses to show it separately
+            if (aumid == null) aumid = ApplyWebApp(w, WebApp(h));
             if (aumid != null) w.Key = "aumid:" + aumid.ToLowerInvariant();
-            else if (pi.Exe != null) w.Key = "exe:" + pi.Exe.ToLowerInvariant();
+            else if (w.Exe != null) w.Key = "exe:" + w.Exe.ToLowerInvariant();
             else w.Key = "pid:" + pid;
             building.Add(w);
             return true;
@@ -199,7 +195,22 @@ namespace Harbor
 
         static readonly Dictionary<IntPtr, string[]> webApps = new Dictionary<IntPtr, string[]>();
 
-        /// <summary>{ app id, display name, icon file } when the window declares relaunch info (PWAs), else null.</summary>
+        /// <summary>Copies WebApp() info onto the window; returns its app id (null when it stays an ordinary exe window).</summary>
+        static string ApplyWebApp(WinInfo w, string[] web)
+        {
+            if (web == null) return null;
+            if (web[0] == null) { w.Exe = web[3]; return null; } // e.g. Steam: its windows belong to steam.exe
+            w.Aumid = web[0];
+            w.WebAppName = web[1];
+            w.WebAppIcon = web[2];
+            return web[0];
+        }
+
+        /// <summary>
+        /// { app id, display name, icon file, relaunch exe } when the window declares relaunch info (PWAs), else null.
+        /// Apps whose id isn't registered anywhere and that give no icon (Steam, Wallpaper Engine: Chromium windows
+        /// tagged "Valve.Steam.Client") come back as { null, name, null, exe } so they show as the exe they relaunch.
+        /// </summary>
         static string[] WebApp(IntPtr h)
         {
             string[] cached;
@@ -214,6 +225,13 @@ namespace Harbor
                 // Store apps hosted by a browser (Netflix, Instagram... from the Microsoft Store run inside msedge.exe)
                 // carry their package app id "Family!App"; installed web apps carry relaunch name / icon instead
                 bool storeApp = id.IndexOf('!') > 0;
+                if (!storeApp && string.IsNullOrEmpty(icon) && !ShellIcons.Exists(@"shell:AppsFolder\" + id))
+                {
+                    string exe = CommandExe(ReadString(ps, fmt, 2));
+                    var asExe = exe != null ? new[] { null, name, null, exe } : null;
+                    webApps[h] = asExe;
+                    return asExe;
+                }
                 if (!storeApp && string.IsNullOrEmpty(icon) && string.IsNullOrEmpty(name)) return null;
                 if (storeApp) { name = name ?? ShellIcons.DisplayName(@"shell:AppsFolder\" + id); icon = null; }
                 if (icon != null)
@@ -228,6 +246,25 @@ namespace Harbor
             }
             catch { return null; }
             finally { if (ps != null) Marshal.ReleaseComObject(ps); }
+        }
+
+        /// <summary>The .exe a relaunch command starts (quoted or not, spaces allowed), if it exists.</summary>
+        static string CommandExe(string cmd)
+        {
+            if (string.IsNullOrEmpty(cmd)) return null;
+            cmd = Environment.ExpandEnvironmentVariables(cmd.Trim());
+            string exe;
+            if (cmd.StartsWith("\""))
+            {
+                int end = cmd.IndexOf('"', 1);
+                exe = end > 1 ? cmd.Substring(1, end - 1) : null;
+            }
+            else
+            {
+                int end = cmd.IndexOf(".exe", StringComparison.OrdinalIgnoreCase);
+                exe = end > 0 ? cmd.Substring(0, end + 4) : null;
+            }
+            return exe != null && exe.EndsWith(".exe", StringComparison.OrdinalIgnoreCase) && System.IO.File.Exists(exe) ? exe : null;
         }
 
         static string ReadString(IPropertyStore ps, Guid fmt, uint pid)
@@ -327,9 +364,9 @@ namespace Harbor
             var pi = GetProc(pid);
             string aumid = pi.ExeName == "applicationframehost.exe" ? WindowAumid(h) : pi.Aumid;
             var w = new WinInfo { Hwnd = h, Pid = pid, Exe = pi.Exe, Aumid = aumid };
-            if (aumid == null) { var web = WebApp(h); if (web != null) { w.Aumid = aumid = web[0]; w.WebAppName = web[1]; w.WebAppIcon = web[2]; } }
+            if (aumid == null) aumid = ApplyWebApp(w, WebApp(h));
             if (aumid != null) w.Key = "aumid:" + aumid.ToLowerInvariant();
-            else if (pi.Exe != null) w.Key = "exe:" + pi.Exe.ToLowerInvariant();
+            else if (w.Exe != null) w.Key = "exe:" + w.Exe.ToLowerInvariant();
             else w.Key = "pid:" + pid;
             return w;
         }

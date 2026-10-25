@@ -57,6 +57,11 @@ namespace Harbor
 
                 // ask every app to (re-)add its icons; they'll now reach us first
                 Broadcast();
+                // ask once more: some apps (Wallpaper Engine) ignore a repeat request that arrives right after
+                // the previous one (e.g. an old instance quitting), and at sign-in many are still starting up
+                var again = new System.Windows.Forms.Timer { Interval = 6000 };
+                again.Tick += delegate { again.Stop(); again.Dispose(); if (hwnd != IntPtr.Zero) Broadcast(); };
+                again.Start();
             }
             catch (Exception ex) { App.Log(ex); Stop(); }
         }

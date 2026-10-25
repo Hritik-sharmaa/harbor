@@ -40,3 +40,4 @@ jobs:
         with:
           files: ${{ env.ZIP }}
           body_path: CHANGELOG.md
+          prerelease: ${{ startsWith(github.ref_name, 'v0.') }}

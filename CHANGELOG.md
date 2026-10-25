@@ -1,8 +1,8 @@
 # Changelog
 
-## 1.0.0 — 2026-10-25
+## 0.1.0 — 2026-10-25 (preview)
 
-First public release.
+First preview release. Harbor is young, so expect rough edges and please [report anything that breaks](https://github.com/Hritik-sharmaa/harbor/issues).
 
 **Dock**
 - Blurred dock with cursor-anchored magnification, at the bottom, left or right of the screen
@@ -10,7 +10,7 @@ First public release.
 - Running dots, launch/attention bounce, unread badges, live window previews, minimized windows and folder stacks
 - Smart Hide: the dock hides only when a window overlaps it, never on the desktop
 - Per-app rules to hide the dock; it stays hidden during screenshots and over fullscreen apps on each monitor
-- Web apps and Store apps hosted in a browser (Netflix, PWAs) get their own icon instead of the browser's
+- Web apps and Store apps hosted in a browser (Netflix, PWAs) get their own icon instead of the browser's, and apps with browser-based windows (Steam, Wallpaper Engine) show their real icon
 
 **Menu bar**
 - Full-width or "islands" style, on every display
