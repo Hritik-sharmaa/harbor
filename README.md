@@ -10,7 +10,7 @@
 </p>
 
 <p align="center">
-  <a href="https://github.com/hritik-sharmaa/harbor/releases/latest"><b>Download</b></a> ·
+  <a href="https://github.com/hritik-sharmaa/harbor/releases"><b>Download</b></a> ·
   <a href="#features">Features</a> ·
   <a href="#build-from-source">Build</a> ·
   <a href="CHANGELOG.md">Changelog</a>
@@ -113,7 +113,7 @@ You can turn these off in **Harbor → General**.
 
 ## Install
 
-1. Download `Harbor-vX.Y.Z.zip` from [Releases](https://github.com/hritik-sharmaa/harbor/releases/latest) and extract it.
+1. Download `Harbor-vX.Y.Z.zip` from [Releases](https://github.com/hritik-sharmaa/harbor/releases) and extract it.
 2. Double-click **`Install Harbor.cmd`**.
 
 Harbor installs for your user only, without admin rights, into `%LOCALAPPDATA%\Programs\Harbor`. It adds a Start-menu shortcut and an entry in **Apps & features**, then starts automatically at sign-in.
