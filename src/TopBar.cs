@@ -103,6 +103,8 @@ namespace Harbor
             S = Disp.Scale;
             H = (int)Math.Round(Math.Max(20, Math.Min(56, Look.Int("BarHeight"))) * S);
             RECT mon = N.MonitorInfo(Disp.HMon).rcMonitor;
+            // screen still waking up (or a stale handle): keep the current layout and look again shortly
+            if (mon.Width <= 0 || mon.Height <= 0) { App.RetryRelayoutSoon(); return; }
             if (!Wanted)
             {
                 bar.Unregister();

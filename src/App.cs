@@ -53,6 +53,7 @@ namespace Harbor
                 else if (m.WParam.ToInt32() == 0x2F && Settings.AutoHide) App.ScheduleRelayout(); // SPI_SETWORKAREA
             }
             else if (m.Msg == N.WM_DISPLAYCHANGE || m.Msg == N.WM_DPICHANGED) App.ScheduleRelayout();
+            else if (m.Msg == N.WM_POWERBROADCAST) App.OnPower(m.WParam.ToInt32(), m.LParam);
             base.WndProc(ref m);
         }
     }
@@ -76,6 +77,9 @@ namespace Harbor
             SnapshotMode = Array.IndexOf(args, "--snapshot") >= 0;
             Theme.Refresh();
             Host = new Host();
+            // screens turning back on (wake from sleep / Modern Standby) hand out new monitor handles
+            Guid displayState = new Guid("6FE69556-704A-47A0-8F24-C28D936FDA47"); // GUID_CONSOLE_DISPLAY_STATE
+            N.RegisterPowerSettingNotification(Host.Handle, ref displayState, 0);
             Tracker.Init(Host.Handle);
             Volume.Init();
 
@@ -222,9 +226,22 @@ namespace Harbor
 
         public static void ScheduleRelayout() { Restart(relayoutTimer); }
 
-        static void ScheduleRelayoutAfter(int ms)
+        public static void ScheduleRelayoutAfter(int ms)
         {
             var t = OneShot(ms, Relayout);
+            t.Tick += delegate { t.Dispose(); };
+            t.Start();
+        }
+
+        static bool retryPending;
+
+        /// <summary>One shared retry, however many bars and docks ask for it.</summary>
+        public static void RetryRelayoutSoon()
+        {
+            if (retryPending) return;
+            retryPending = true;
+            var t = OneShot(1000, () => { retryPending = false; Relayout(); });
+            t.Tick += delegate { t.Dispose(); };
             t.Start();
         }
         public static void ScheduleTrim() { Restart(trimTimer); }
@@ -238,9 +255,38 @@ namespace Harbor
 
         public static void RenderBars() { foreach (var d in Displays) d.Bar.RenderBar(); }
 
+        /// <summary>Wake from sleep, or the screens turning back on: re-measure once they've settled, and again a bit later.</summary>
+        public static void OnPower(int code, IntPtr data)
+        {
+            bool wake = code == 0x7 || code == 0x12; // PBT_APMRESUMESUSPEND, PBT_APMRESUMEAUTOMATIC
+            // PBT_POWERSETTINGCHANGE for GUID_CONSOLE_DISPLAY_STATE: POWERBROADCAST_SETTING { Guid; DWORD len; DWORD state }, 1 = on
+            if (code == 0x8013 && data != IntPtr.Zero) wake = Marshal.ReadInt32(data, 20) == 1;
+            if (!wake) return;
+            ScheduleRelayoutAfter(1000);
+            ScheduleRelayoutAfter(4000);
+        }
+
+        /// <summary>
+        /// Monitor handles change when screens power off and on (sleep), even though their names and sizes don't.
+        /// Looks every display's handle up again; false if a screen can't be found (then everything is rebuilt).
+        /// </summary>
+        static bool RefreshMonitors()
+        {
+            var screens = Screen.AllScreens;
+            foreach (var d in Displays)
+            {
+                var s = Array.Find(screens, q => q.DeviceName == d.Name);
+                if (s == null || s.Bounds.Width <= 0) return false;
+                var b = s.Bounds;
+                d.HMon = N.MonitorFromPoint(new POINT(b.X + b.Width / 2, b.Y + b.Height / 2), 2);
+                if (N.MonitorInfo(d.HMon).rcMonitor.Width <= 0) return false;
+            }
+            return true;
+        }
+
         public static void Relayout()
         {
-            if (MonitorSignature() != builtSignature)
+            if (MonitorSignature() != builtSignature || !RefreshMonitors())
             {
                 TeardownDisplays();
                 BuildDisplays();

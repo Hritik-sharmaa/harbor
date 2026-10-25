@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.1 — 2026-10-25 (preview)
+
+**Fixed**
+- After waking from sleep or Modern Standby, the menu bar could shrink to nothing and the dock could stop responding. Windows gives monitors new handles when screens power back on; Harbor now looks them up again, re-measures the screens after wake, and never lays itself out on a screen that reports zero size.
+
 ## 0.1.0 — 2026-10-25 (preview)
 
 First preview release. Harbor is young, so expect rough edges and please [report anything that breaks](https://github.com/Hritik-sharmaa/harbor/issues).

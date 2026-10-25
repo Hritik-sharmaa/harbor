@@ -551,6 +551,8 @@ namespace Harbor
             pos = Look.Get("DockPosition");
             if (pos != "left" && pos != "right") pos = "bottom";
             RECT mon = N.MonitorInfo(Disp.HMon).rcMonitor;
+            // screen still waking up (or a stale handle): keep the current layout and look again shortly
+            if (mon.Width <= 0 || mon.Height <= 0) { App.RetryRelayoutSoon(); return; }
             monLeft = mon.Left;
             monWidth = mon.Width;
             monTop = mon.Top;
