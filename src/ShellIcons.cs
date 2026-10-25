@@ -892,14 +892,14 @@ namespace Harbor
 
         public Bitmap Bitmap { get { return bmp; } }
 
-        public void Present(IntPtr hwnd, int x, int y)
+        public void Present(IntPtr hwnd, int x, int y, byte opacity = 255)
         {
             G.Flush(FlushIntention.Sync);
             N.GdiFlush();
             var dst = new POINT(x, y);
             var size = new SIZE(W, H);
             var src = new POINT(0, 0);
-            var blend = new BLENDFUNCTION { BlendOp = 0, BlendFlags = 0, SourceConstantAlpha = 255, AlphaFormat = 1 };
+            var blend = new BLENDFUNCTION { BlendOp = 0, BlendFlags = 0, SourceConstantAlpha = opacity, AlphaFormat = 1 };
             N.UpdateLayeredWindow(hwnd, IntPtr.Zero, ref dst, ref size, hdc, ref src, 0, ref blend, 2);
         }
 

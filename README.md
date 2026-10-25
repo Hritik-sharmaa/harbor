@@ -78,6 +78,7 @@ Most dock replacements are web apps that run a whole browser in the background. 
   - **Sound**: per-app volume
   - **Calendar**, **Battery** and **Media**
 - **Notification Center** shows your real Windows notifications, plus calendar, now-playing and system widgets
+- **Notification banners** appear at the top right in the macOS style instead of Windows' pop-ups. Harbor turns Windows' own banners back on when it quits, and you can switch this off in **Harbor → General**
 
 ### Customize everything
 

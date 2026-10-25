@@ -32,7 +32,7 @@ namespace Harbor
             // general
             { "Accent", "#0A84FF" },
             { "CornerTL", "none" }, { "CornerTR", "none" }, { "Hotkeys", "1" },
-            { "NcWidgets", "1" },
+            { "NcWidgets", "1" }, { "Banners", "1" },
         };
 
         static readonly Dictionary<string, string> vals = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);

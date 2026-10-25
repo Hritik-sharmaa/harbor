@@ -1,5 +1,14 @@
 # Changelog
 
+## 0.1.2 — 2026-10-25 (preview)
+
+**New**
+- macOS-style notification banners at the top right, under the menu bar, instead of Windows' pop-ups at the bottom right. They stack, pause while you hover, open the app on click, and stay quiet during Do Not Disturb, fullscreen apps and presentations. Windows keeps its own banners for alarms and system prompts, which need their buttons.
+- While this is on, Harbor turns off Windows' "Show notification banners" for each app and turns it back on when Harbor quits, is uninstalled, or the option is switched off (**Harbor → General**). Notifications still collect in the Notification Center.
+
+**Fixed**
+- `--snapshot` could produce blank images or crash, because bitmap copies still pointed at window memory.
+
 ## 0.1.1 — 2026-10-25 (preview)
 
 **Fixed**

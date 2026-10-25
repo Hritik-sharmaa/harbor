@@ -1329,7 +1329,7 @@ namespace Harbor
                 hoverIdx = HitTest(mx, my);
             }
             Render();
-            return (Bitmap)surf.Bitmap.Clone();
+            return new Bitmap(surf.Bitmap); // a real copy: Clone() still points at the window's DIB
         }
 
         public int ItemCount { get { return items.Count; } }

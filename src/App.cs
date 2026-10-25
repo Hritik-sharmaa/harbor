@@ -135,6 +135,7 @@ namespace Harbor
             SysInfo.Init();
             BtBattery.Init();
             RegisterHotkeys();
+            Banners.Apply();
             WatchForeground();
             foreach (var d in Displays) d.Bar.RenderBar();
             ScheduleRelayoutAfter(1500); // the taskbar's auto-hide switch is asynchronous
@@ -313,6 +314,7 @@ namespace Harbor
                     Theme.Refresh();
                     SysInfo.Apply();
                     RegisterHotkeys();
+                    Banners.Apply();
                     foreach (var d in Displays)
                     {
                         d.Bar.ApplyBlur();
@@ -646,6 +648,7 @@ namespace Harbor
         /// <summary>Gives the screen back to Windows: tray icons, taskbar, app-bar space.</summary>
         public static void EmergencyRestore()
         {
+            try { Banners.RestoreWindows(); } catch { }
             try { TrayService.Stop(); } catch { }
             try { Gamma.ResetAll(); } catch { }
             try { Taskbar.Apply(false); } catch { }
@@ -686,6 +689,7 @@ namespace Harbor
             Compose(bar, Path.Combine(dir, "bar.png"));
             Compose(dock, Path.Combine(dir, "dock.png"));
             IconSheet(Path.Combine(dir, "icons.png"));
+            using (var bn = Banners.Snapshot(p)) Compose(bn, Path.Combine(dir, "banner.png"));
             float s = p.Scale;
             var cc = new ControlCenter { bar = p.Bar };
             var shots = new List<KeyValuePair<string, Flyout>>
@@ -877,6 +881,7 @@ namespace Harbor
                     IntPtr h0 = N.FindWindow(null, "HarborHost");
                     if (h0 != IntPtr.Zero) { N.PostMessage(h0, N.WM_CLOSE, IntPtr.Zero, IntPtr.Zero); Thread.Sleep(1500); }
                     Installer.Remove();
+                    Banners.RestoreWindows();
                     Installer.DeleteFilesAfterExit();
                     return;
                 }
