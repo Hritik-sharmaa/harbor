@@ -23,11 +23,20 @@ namespace Harbor
         static long lastIdle, lastKernel, lastUser, lastRx, lastTx;
         static DateTime lastNet;
         static System.Windows.Forms.Timer fast, slow;
+        static string lastShown;
 
         public static void Init()
         {
             fast = new System.Windows.Forms.Timer { Interval = 1500 };
-            fast.Tick += delegate { SampleFast(); if (Changed != null) Changed(); };
+            fast.Tick += delegate
+            {
+                SampleFast();
+                // redraw the menu bars only when a number they show actually changed
+                string shown = Cpu + "|" + Ram + "|" + TempC + (Look.Bool("BarNet") ? "|" + Speed(DownBps) + "|" + Speed(UpBps) : "");
+                if (shown == lastShown) return;
+                lastShown = shown;
+                if (Changed != null) Changed();
+            };
             slow = new System.Windows.Forms.Timer { Interval = 3000 };
             slow.Tick += delegate { SampleSlow(); };
             Apply();

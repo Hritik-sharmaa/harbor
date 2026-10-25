@@ -144,6 +144,9 @@ namespace Harbor
             // launched by hand (Start menu / double-click) rather than at login: show the app window
             if (Array.IndexOf(args, "--startup") < 0) { var t = OneShot(400, SettingsWindow.ShowWindow); t.Start(); }
             ScheduleTrim();
+            var settled = OneShot(20000, Trim); // again once icons, tray and async sources have finished loading
+            settled.Tick += delegate { settled.Dispose(); };
+            settled.Start();
             idleTrim = new System.Windows.Forms.Timer { Interval = 10 * 60 * 1000 };
             idleTrim.Tick += delegate { Trim(); };
             idleTrim.Start();

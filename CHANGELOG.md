@@ -1,5 +1,13 @@
 # Changelog
 
+## 0.1.3 — 2026-10-25 (preview)
+
+**Faster and lighter**
+- Idle CPU is down from about 0.33% to 0.05% of the PC (1,604 to 234 ms per minute), and idle RAM from 45–51 MB to about 28 MB.
+- Banners no longer check the notification list every 1.5 seconds. Windows records each new notification in the registry, so Harbor waits for that and does nothing until one arrives.
+- The menu bar redraws its CPU/RAM/temperature readout only when a displayed number changes.
+- Harbor frees memory once startup has settled and after the last banner disappears.
+
 ## 0.1.2 — 2026-10-25 (preview)
 
 **New**

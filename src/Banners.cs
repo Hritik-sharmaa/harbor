@@ -22,10 +22,9 @@ namespace Harbor
     {
         const string NotifRoot = @"Software\Microsoft\Windows\CurrentVersion\Notifications\Settings";
         const string OwnKey = @"Software\Harbor", OwnValue = "BannersHidden";
-        const int PollMs = 1500, LifeMs = 5000, MaxShown = 3;
+        const int LifeMs = 5000, MaxShown = 3;
 
         static bool running, polling, primed, checkedLeftovers;
-        static Timer poll;
         static readonly HashSet<uint> seen = new HashSet<uint>();
 
         // ------------------------------------------------------------------ on / off
@@ -49,11 +48,10 @@ namespace Harbor
                 {
                     if (!running || access != UserNotificationListenerAccessStatus.Allowed) return;
                     HideAllKnown();
-                    if (poll == null) { poll = new Timer { Interval = PollMs }; poll.Tick += delegate { Poll(); }; }
                     primed = false;
                     seen.Clear();
                     Poll();
-                    poll.Start();
+                    Watch();
                 });
             }
             catch (Exception ex) { App.Log(ex); }
@@ -62,7 +60,7 @@ namespace Harbor
         static void Stop()
         {
             running = false;
-            if (poll != null) poll.Stop();
+            Unwatch();
             foreach (var b in live.ToArray()) b.Dispose();
             shown.Clear();
             live.Clear();
@@ -153,15 +151,65 @@ namespace Harbor
 
         // ------------------------------------------------------------------ new notifications
 
+        // Windows stamps "LastNotificationAddedTime" under the sending app's key in NotifRoot the moment a
+        // notification arrives, so Harbor sleeps on a registry change notification instead of polling the list
+        // (which cost ~80% of Harbor's idle CPU). Zero work until something actually arrives.
+        [DllImport("advapi32.dll")] static extern int RegNotifyChangeKeyValue(IntPtr key, bool subtree, uint filter, IntPtr ev, bool async);
+        static RegistryKey watchKey;
+        static System.Threading.AutoResetEvent watchEvent;
+        static System.Threading.RegisteredWaitHandle watchWait;
+        static Timer recheck;
+
+        static void Watch()
+        {
+            if (!running) return;
+            try
+            {
+                if (watchKey == null)
+                {
+                    watchKey = Registry.CurrentUser.OpenSubKey(NotifRoot);
+                    if (watchKey == null) return;
+                    watchEvent = new System.Threading.AutoResetEvent(false);
+                }
+                // REG_NOTIFY_CHANGE_NAME | REG_NOTIFY_CHANGE_LAST_SET, whole subtree; one-shot, re-armed after each change
+                RegNotifyChangeKeyValue(watchKey.Handle.DangerousGetHandle(), true, 0x1 | 0x4, watchEvent.SafeWaitHandle.DangerousGetHandle(), true);
+                watchWait = System.Threading.ThreadPool.RegisterWaitForSingleObject(watchEvent, (s, t) => App.Post(OnRegistryChanged), null, -1, true);
+            }
+            catch (Exception ex) { App.Log(ex); }
+        }
+
+        static void Unwatch()
+        {
+            if (watchWait != null) { watchWait.Unregister(null); watchWait = null; }
+            if (watchKey != null) { watchKey.Close(); watchKey = null; } // closing the key cancels the pending notification
+            if (watchEvent != null) { watchEvent.Close(); watchEvent = null; }
+            if (recheck != null) recheck.Stop();
+        }
+
+        static void OnRegistryChanged()
+        {
+            if (!running) return;
+            Watch();
+            Poll();
+            // the registry can be stamped a moment before the notification is readable: look once more shortly after
+            if (recheck == null) { recheck = new Timer { Interval = 700 }; recheck.Tick += delegate { recheck.Stop(); Poll(); }; }
+            recheck.Stop();
+            recheck.Start();
+        }
+
+        static bool pollAgain;
+
         static void Poll()
         {
-            if (polling || !running) return;
+            if (!running) return;
+            if (polling) { pollAgain = true; return; }
             polling = true;
             try
             {
                 Async.Then(UserNotificationListener.Current.GetNotificationsAsync(NotificationKinds.Toast), list =>
                 {
                     polling = false;
+                    if (pollAgain) { pollAgain = false; Poll(); }
                     if (list == null || !running) return;
                     var present = new HashSet<uint>();
                     var fresh = new List<UserNotification>();
@@ -266,7 +314,7 @@ namespace Harbor
         static void Animate()
         {
             foreach (var b in live.ToArray()) b.Step();
-            if (live.Count == 0) anim.Stop();
+            if (live.Count == 0) { anim.Stop(); App.ScheduleTrim(); } // last banner gone: hand the memory back
         }
 
         internal static void Open(BannerForm b)
