@@ -130,19 +130,56 @@ namespace Harbor
                 if (!was) SetAutoHide(true);
                 foreach (var h in Bars()) N.ShowWindow(h, N.SW_HIDE);
                 applied = true;
+                HookShows();
             }
             else if (!hide && applied)
             {
+                Unhook();
                 foreach (var h in Bars()) N.ShowWindow(h, N.SW_SHOWNA);
                 if (!Settings.TaskbarWasAutoHide) SetAutoHide(false);
                 applied = false;
             }
         }
 
+        // Explorer re-shows its taskbar window after the Windows key, Start, Search, some notifications... While it is
+        // shown in auto-hide mode, a 2 px strip sits on the bottom edge, and reaching for the dock slides the whole
+        // taskbar up over it. Hide it the instant Explorer shows it, instead of waiting for the next check.
+        static IntPtr showHook;
+        static WinEventDelegate showProc;
+        static uint hookedPid;
+
+        static void HookShows()
+        {
+            IntPtr bar = MainBar();
+            if (bar == IntPtr.Zero) return;
+            uint pid;
+            N.GetWindowThreadProcessId(bar, out pid);
+            if (showHook != IntPtr.Zero && pid == hookedPid) return;
+            Unhook();
+            if (showProc == null)
+                showProc = (hook, ev, hwnd, idObject, idChild, thread, time) =>
+                {
+                    if (!applied || idObject != 0 || idChild != 0 || hwnd == IntPtr.Zero) return;
+                    string cls = N.ClassOf(hwnd);
+                    if ((cls == "Shell_TrayWnd" || cls == "Shell_SecondaryTrayWnd") && !Tracker.IsSelf(hwnd))
+                        N.ShowWindow(hwnd, N.SW_HIDE);
+                };
+            showHook = N.SetWinEventHook(0x8002 /*EVENT_OBJECT_SHOW*/, 0x8002, IntPtr.Zero, showProc, pid, 0, N.WINEVENT_OUTOFCONTEXT);
+            hookedPid = pid;
+        }
+
+        static void Unhook()
+        {
+            if (showHook != IntPtr.Zero) N.UnhookWinEvent(showHook);
+            showHook = IntPtr.Zero;
+            hookedPid = 0;
+        }
+
         /// <summary>Explorer likes to re-show the taskbar (e.g. after Start opens); hide it again.</summary>
         public static void Enforce()
         {
             if (!applied) return;
+            HookShows(); // no-op unless Explorer restarted (new process)
             foreach (var h in Bars())
                 if (N.IsWindowVisible(h)) N.ShowWindow(h, N.SW_HIDE);
         }

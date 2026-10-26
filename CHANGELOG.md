@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.4 — 2026-10-26 (preview)
+
+**Fixed**
+- The Windows taskbar could slide up over the dock when you moved the mouse to the bottom edge. Windows shows its hidden taskbar again after the Windows key, Start, Search and some notifications, and Harbor only re-hid it every 4 seconds. Harbor now hides it the moment Windows shows it, within about 20 ms.
+
 ## 0.1.3 — 2026-10-25 (preview)
 
 **Faster and lighter**
