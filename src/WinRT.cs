@@ -56,8 +56,11 @@ namespace Harbor
     /// <summary>Now-playing info from any app that reports to Windows (Spotify, browsers, Media Player...).</summary>
     static class Media
     {
-        public static string Title, Artist, SourceApp;
+        public static string Title, Artist, SourceApp, Album;
         public static bool Playing;
+        public static TimeSpan Duration;                 // zero when the app doesn't report a timeline
+        static TimeSpan position;
+        static DateTimeOffset positionAt;
         public static Bitmap Art;
         public static event Action Changed;
         public static bool Demo; // --snapshot --demo: sample data for README screenshots
@@ -67,7 +70,67 @@ namespace Harbor
         static GlobalSystemMediaTransportControlsSession session;
         static TypedEventHandler<GlobalSystemMediaTransportControlsSession, MediaPropertiesChangedEventArgs> propHandler;
         static TypedEventHandler<GlobalSystemMediaTransportControlsSession, PlaybackInfoChangedEventArgs> playHandler;
+        static TypedEventHandler<GlobalSystemMediaTransportControlsSession, TimelinePropertiesChangedEventArgs> timeHandler;
         static int loadSeq;
+
+        /// <summary>Where the song is right now: the last reported position plus the time it has been playing since.</summary>
+        public static TimeSpan Position
+        {
+            get
+            {
+                if (Duration <= TimeSpan.Zero) return TimeSpan.Zero;
+                var p = position;
+                if (Playing && positionAt != default(DateTimeOffset)) p += DateTimeOffset.Now - positionAt;
+                return p < TimeSpan.Zero ? TimeSpan.Zero : (p > Duration ? Duration : p);
+            }
+        }
+
+        /// <summary>Reads the app's timeline. A report older than what we already know (some apps don't re-stamp on pause) is ignored unless 'fresh' (new song).</summary>
+        static void LoadTimeline(bool fresh = false)
+        {
+            if (Demo) return;
+            try
+            {
+                if (session == null) { Duration = TimeSpan.Zero; return; }
+                var t = session.GetTimelineProperties();
+                Duration = t.EndTime - t.StartTime;
+                var stamp = t.LastUpdatedTime;
+                bool unstamped = stamp.Year < 2000 || stamp > DateTimeOffset.Now;
+                if (unstamped) stamp = DateTimeOffset.Now;
+                if (fresh || unstamped || stamp >= positionAt)
+                {
+                    position = t.Position - t.StartTime;
+                    positionAt = stamp;
+                }
+            }
+            catch { Duration = TimeSpan.Zero; }
+        }
+
+        /// <summary>True while the Now Playing panel is open: only then is the app's stream of position updates worth reading.</summary>
+        public static bool WantTimeline;
+
+        public static void RefreshTimeline() { LoadTimeline(); }
+
+        /// <summary>--snapshot --demo: a sample position in a sample song.</summary>
+        public static void DemoTimeline(TimeSpan at, TimeSpan length)
+        {
+            Duration = length;
+            position = at;
+            positionAt = DateTimeOffset.Now;
+        }
+
+        public static void Seek(TimeSpan to)
+        {
+            if (session == null || Duration <= TimeSpan.Zero) return;
+            try
+            {
+                var t = session.GetTimelineProperties();
+                session.TryChangePlaybackPositionAsync((t.StartTime + to).Ticks);
+                position = to;           // show it straight away; the app confirms with a timeline event
+                positionAt = DateTimeOffset.Now;
+            }
+            catch { }
+        }
 
         public static void Init()
         {
@@ -96,6 +159,7 @@ namespace Harbor
                     {
                         session.MediaPropertiesChanged -= propHandler;
                         session.PlaybackInfoChanged -= playHandler;
+                        session.TimelinePropertiesChanged -= timeHandler;
                     }
                 }
                 catch { }
@@ -104,8 +168,12 @@ namespace Harbor
                 {
                     propHandler = (a, b) => App.Post(Load);
                     playHandler = (a, b) => App.Post(LoadPlayback);
+                    // apps report the position very often while playing: just note it. Nothing in the menu bar shows it,
+                    // and the Now Playing panel redraws on its own clock while it's open.
+                    timeHandler = (a, b) => { if (WantTimeline) App.Post(() => LoadTimeline()); };
                     s.MediaPropertiesChanged += propHandler;
                     s.PlaybackInfoChanged += playHandler;
+                    try { s.TimelinePropertiesChanged += timeHandler; } catch { }
                 }
             }
             Load();
@@ -113,8 +181,12 @@ namespace Harbor
 
         static void LoadPlayback()
         {
+            if (Demo) return;
+            var keep = Position; // pausing freezes the clock where it is
             try { Playing = session != null && session.GetPlaybackInfo().PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing; }
             catch { Playing = false; }
+            if (Duration > TimeSpan.Zero) { position = keep; positionAt = DateTimeOffset.Now; }
+            LoadTimeline();
             Fire();
         }
 
@@ -122,7 +194,7 @@ namespace Harbor
         {
             int seq = ++loadSeq;
             if (Demo) return;
-            if (session == null) { Title = Artist = SourceApp = null; Playing = false; SetArt(null); Fire(); return; }
+            if (session == null) { Title = Artist = SourceApp = Album = null; Playing = false; Duration = TimeSpan.Zero; SetArt(null); Fire(); return; }
             try { SourceApp = session.SourceAppUserModelId; } catch { }
             LoadPlayback();
             try
@@ -133,6 +205,8 @@ namespace Harbor
                     if (p == null) return;
                     Title = p.Title;
                     Artist = p.Artist;
+                    Album = p.AlbumTitle;
+                    LoadTimeline(true);
                     Fire();
                     if (p.Thumbnail == null) { SetArt(null); Fire(); return; }
                     Async.Then(p.Thumbnail.OpenReadAsync(), stream =>
@@ -148,7 +222,7 @@ namespace Harbor
                                 reader.ReadBytes(buf);
                                 using (var ms = new MemoryStream(buf))
                                 using (var b = new Bitmap(ms))
-                                    SetArt(Gfx.Scale(b, 96));
+                                    SetArt(Gfx.Scale(b, 240)); // sharp in the bigger Now Playing cover
                                 Fire();
                             }
                             catch { }

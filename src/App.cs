@@ -226,7 +226,7 @@ namespace Harbor
             return t;
         }
 
-        static void Restart(System.Windows.Forms.Timer t) { if (t == null) return; t.Stop(); t.Start(); }
+        static void Restart(System.Windows.Forms.Timer t) { if (t == null || shuttingDown) return; t.Stop(); t.Start(); }
 
         public static void ScheduleRelayout() { Restart(relayoutTimer); }
 
@@ -448,6 +448,7 @@ namespace Harbor
 
         static void WatchForeground()
         {
+            if (shuttingDown) return;
             IntPtr fg = N.GetForegroundWindow();
             uint pid;
             N.GetWindowThreadProcessId(fg, out pid);
@@ -649,8 +650,13 @@ namespace Harbor
         }
 
         /// <summary>Gives the screen back to Windows: tray icons, taskbar, app-bar space.</summary>
+        static bool shuttingDown;
+
         public static void EmergencyRestore()
         {
+            // window events can still arrive while .NET shuts down; touching a timer then crashes the process
+            shuttingDown = true;
+            if (locHook != IntPtr.Zero) { N.UnhookWinEvent(locHook); locHook = IntPtr.Zero; }
             try { Banners.RestoreWindows(); } catch { }
             try { TrayService.Stop(); } catch { }
             try { Gamma.ResetAll(); } catch { }
@@ -789,6 +795,7 @@ namespace Harbor
             Media.Artist = "M83";
             Media.SourceApp = "Spotify.exe";
             Media.Playing = true;
+            Media.DemoTimeline(TimeSpan.FromSeconds(72), TimeSpan.FromSeconds(243));
             BtBattery.ConnectedName = "AirPods Pro";
             BtBattery.ConnectedLevel = 85;
             NotificationCenter.Demo = true;
@@ -861,6 +868,14 @@ namespace Harbor
         [STAThread]
         static void Main(string[] args)
         {
+            int lt = Array.IndexOf(args, "--lyrics-test");
+            if (lt >= 0 && lt + 3 < args.Length)
+            {
+                int secs = 0;
+                if (lt + 4 < args.Length) int.TryParse(args[lt + 4], out secs);
+                Lyrics.Test(args[lt + 1], args[lt + 2], args[lt + 3], secs);
+                return;
+            }
             if (Array.IndexOf(args, "--install") >= 0)
             {
                 try { Installer.Install(); }

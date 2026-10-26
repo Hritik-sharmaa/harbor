@@ -76,7 +76,8 @@ Most dock replacements are web apps that run a whole browser in the background. 
   - **Wi‑Fi**: networks list
   - **Bluetooth**: devices with battery levels
   - **Sound**: per-app volume
-  - **Calendar**, **Battery** and **Media**
+  - **Calendar** and **Battery**
+  - **Now Playing**: colours from the album art, a seekable progress bar, and time-synced lyrics that follow the song (click a line to jump to it)
 - **Notification Center** shows your real Windows notifications, plus calendar, now-playing and system widgets
 - **Notification banners** appear at the top right in the macOS style instead of Windows' pop-ups. Harbor turns Windows' own banners back on when it quits, and you can switch this off in **Harbor → General**
 
@@ -172,7 +173,9 @@ bin\Harbor.exe --install
 
 ## Privacy
 
-Harbor makes **no network requests**. It has no telemetry, analytics or auto-download. **Check for Updates** just opens the Releases page in your browser.
+Harbor has no telemetry, analytics or auto-download. **Check for Updates** just opens the Releases page in your browser.
+
+Its only network request is for **song lyrics**. While the Now Playing panel is open, it asks [LRCLIB](https://lrclib.net), a free and open lyrics service, for the current song by sending its title, artist, album and length. You can turn this off with the **Lyrics** button in the panel or in **Harbor → General**.
 
 Notifications, media info and system stats are read locally to draw the UI and are never stored or sent anywhere.
 

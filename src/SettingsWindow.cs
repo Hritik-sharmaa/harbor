@@ -112,7 +112,7 @@ namespace Harbor
             cardTop = -1;
         }
 
-        public const string Version = "0.1.4";
+        public const string Version = "0.1.5";
         public const string RepoUrl = "https://github.com/hritik-sharmaa/harbor";
         static readonly string[] pageInfo =
         {
@@ -236,6 +236,7 @@ namespace Harbor
             ui.ToggleRow("tray", "Background apps (tray) in the menu bar", Settings.TrayIcons, v => { Settings.TrayIcons = v; Full(); });
             Toggle(ui, "NcWidgets", "Widgets in Notification Center", "Calendar, now playing, CPU / memory / battery");
             Toggle(ui, "Banners", "Harbor notification banners", "Shows notifications at the top right instead of Windows' pop-ups");
+            Toggle(ui, "Lyrics", "Song lyrics in Now Playing", "From lrclib.net: sends the song's title, artist and length while the panel is open");
 
             Card(ui, "Hot corners");
             string[] acts = { "none", "taskview", "notifications", "control", "desktop", "lock" };

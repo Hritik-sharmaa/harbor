@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.1.5 — 2026-10-26 (preview)
+
+**New**
+- Redesigned Now Playing panel. The background takes its colours from the album art, the cover is bigger, there's a progress bar with elapsed and remaining time that you can click or drag to seek, and the controls are larger.
+- Time-synced lyrics from [LRCLIB](https://lrclib.net). The current line is highlighted and the view scrolls with the song; click a line to jump to it. Songs that only have unsynced lyrics show them in full. You can turn lyrics off with the **Lyrics** button in the panel or in **Harbor → General**.
+- Privacy: this is Harbor's first network request. While the panel is open, it sends the song's title, artist, album and length to lrclib.net. See the README.
+
+**Fixed**
+- A rare crash when quitting Harbor, if a window moved at the moment it quit.
+
 ## 0.1.4 — 2026-10-26 (preview)
 
 **Fixed**
