@@ -143,10 +143,13 @@ namespace Harbor
             App.ScheduleTrim();
         }
 
+        /// <summary>Set while something (a file drag) needs the panel to survive losing focus.</summary>
+        protected bool HoldOpen;
+
         protected override void OnDeactivate(EventArgs e)
         {
             base.OnDeactivate(e);
-            if (!WindowMode) CloseFlyout();
+            if (!WindowMode && !HoldOpen) CloseFlyout();
         }
 
         public void Refresh2() { if (Visible) Render(false); }

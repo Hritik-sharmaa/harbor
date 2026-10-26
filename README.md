@@ -36,7 +36,7 @@ Most dock replacements are web apps that run a whole browser in the background. 
 - **Apps and windows**
   - Running dots, launch and attention bounce, and **unread badges** (for example "Inbox (3)")
   - **Live window previews** on hover
-  - **Minimized windows** and **folder stacks** in the dock
+  - **Minimized windows** and **folder stacks** in the dock. Drag files out of a stack (such as Downloads) straight into a browser upload, chat or folder
   - Web apps and Store apps that run inside a browser (Netflix, installed PWAs) get their own icon instead of the browser's
 - **Pinning and editing**
   - Drag to reorder, or drag out to remove

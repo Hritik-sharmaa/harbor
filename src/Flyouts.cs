@@ -699,11 +699,53 @@ namespace Harbor
                     using (var sf = new StringFormat { Alignment = StringAlignment.Center, Trimming = StringTrimming.EllipsisCharacter })
                         ui.G.DrawString(e.Name, ui.Small, ui.TextBrush, new RectangleF(r.X + 4 * S, r.Y + 56 * S, cell - 8 * S, 32 * S), sf);
                     string path = e.FullName;
+                    paths[id] = path;
                     ui.AddHit(id, r, () => { if (LastButton == MouseButtons.Right) Launcher.Reveal(path); else Launcher.Open(path); });
                 }
             }
             ui.Gap(4);
             ui.Button("openfolder", "Open in File Explorer", () => Launcher.Open(folder));
+            ui.Text("Drag a file out to drop it into a browser, chat or folder", new RectangleF(ui.Pad, ui.Y, ui.Right - ui.Pad, 20 * S), ui.Small, ui.DimBrush, 1);
+            ui.Y += 22 * S;
+        }
+
+        // ---- drag files out (browser uploads, chat, mail, folders)
+        readonly Dictionary<string, string> paths = new Dictionary<string, string>();
+        string downPath;
+        Point downAt;
+
+        protected override void OnMouseDown(MouseEventArgs e)
+        {
+            base.OnMouseDown(e);
+            string p;
+            downPath = e.Button == MouseButtons.Left && Pressed != null && paths.TryGetValue(Pressed, out p) ? p : null;
+            downAt = e.Location;
+        }
+
+        protected override void OnMouseMove(MouseEventArgs e)
+        {
+            if (downPath != null && e.Button == MouseButtons.Left)
+            {
+                var d = SystemInformation.DragSize;
+                if (Math.Abs(e.X - downAt.X) > d.Width || Math.Abs(e.Y - downAt.Y) > d.Height)
+                {
+                    string path = downPath;
+                    downPath = null;
+                    Pressed = null;
+                    HoldOpen = true; // dropping onto another app activates it; don't vanish mid-drag
+                    try { ShellDrag.Drag(Handle, path); }
+                    finally { HoldOpen = false; }
+                    CloseFlyout();
+                    return;
+                }
+            }
+            base.OnMouseMove(e);
+        }
+
+        protected override void OnMouseUp(MouseEventArgs e)
+        {
+            downPath = null;
+            base.OnMouseUp(e);
         }
     }
 }

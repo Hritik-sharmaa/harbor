@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.6 — 2026-10-26 (preview)
+
+**New**
+- Drag files out of a dock stack, such as Downloads, and drop them into a browser upload box, Gmail, a chat app or a folder. It works exactly like dragging from File Explorer, with the same file icon under the cursor. Dropping onto a folder on the same drive moves the file, as in Explorer; hold Ctrl to copy.
+
 ## 0.1.5 — 2026-10-26 (preview)
 
 **New**
