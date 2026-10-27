@@ -33,6 +33,12 @@ namespace Harbor
             { "Accent", "#0A84FF" },
             { "CornerTL", "none" }, { "CornerTR", "none" }, { "Hotkeys", "1" },
             { "NcWidgets", "1" }, { "Banners", "1" }, { "Lyrics", "1" },
+            // island (centre of the menu bar)
+            { "Island", "1" }, { "IslandTab", "dashboard" },
+            { "PomoWork", "25" }, { "PomoShort", "5" }, { "PomoLong", "15" }, { "PomoToday", "" },
+            { "DayStart", "9" }, { "DayEnd", "18" },
+            { "WeatherCity", "" }, { "WeatherPlace", "" }, { "WeatherLat", "" }, { "WeatherLon", "" }, { "WeatherUnit", "C" },
+            { "ScreenTime", "1" }, { "PomoFocus", "" }, { "ClaudeBanners", "1" }, { "KeepAwake", "0" },
         };
 
         static readonly Dictionary<string, string> vals = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);

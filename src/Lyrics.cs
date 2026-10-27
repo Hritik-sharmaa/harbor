@@ -120,14 +120,14 @@ namespace Harbor
             if (!string.IsNullOrWhiteSpace(album)) q.Append("&album_name=").Append(Uri.EscapeDataString(album));
             if (duration > TimeSpan.Zero) q.Append("&duration=").Append((int)Math.Round(duration.TotalSeconds));
             int status;
-            string json = Get(Api + q, out status);
+            string json = Web.Get(Api + q, out status);
             if (status == 200) { var r = FromJson(new JavaScriptSerializer().Deserialize<Dictionary<string, object>>(json)); if (r != null) return r; }
             else if (status != 404) return new Result { Failed = true };
 
             // 2) search with a cleaned title ("Song - Remastered 2011", "Song (feat. X)") and pick the closest length
             string clean = Regex.Replace(title, @"\s*[\(\[].*?(feat|ft\.|with|remaster|version|live|edit|mix).*?[\)\]]|\s+-\s+.*(remaster|version|live|edit|mix).*$", "", RegexOptions.IgnoreCase).Trim();
             string mainArtist = Regex.Split(artist ?? "", @"\s*(,|&|feat\.?|ft\.|x)\s+", RegexOptions.IgnoreCase)[0];
-            json = Get(Api + "search?track_name=" + Uri.EscapeDataString(clean) + "&artist_name=" + Uri.EscapeDataString(mainArtist), out status);
+            json = Web.Get(Api + "search?track_name=" + Uri.EscapeDataString(clean) + "&artist_name=" + Uri.EscapeDataString(mainArtist), out status);
             if (status != 200 && status != 404) return new Result { Failed = true };
             var best = status == 200 ? Pick(json, duration, null) : null;
 
@@ -135,7 +135,7 @@ namespace Harbor
             //    must have the same length (within 4 s), or the same title when the app doesn't report a length.
             if (best == null)
             {
-                json = Get(Api + "search?q=" + Uri.EscapeDataString(clean + " " + mainArtist), out status);
+                json = Web.Get(Api + "search?q=" + Uri.EscapeDataString(clean + " " + mainArtist), out status);
                 if (status != 200 && status != 404) return new Result { Failed = true };
                 if (status == 200) best = Pick(json, duration, clean);
             }
@@ -207,7 +207,12 @@ namespace Harbor
             return lines;
         }
 
-        static string Get(string url, out int status)
+    }
+
+    /// <summary>Plain HTTPS GET for Harbor's few web lookups (lyrics, weather). It blocks, so call it off the UI thread.</summary>
+    static class Web
+    {
+        public static string Get(string url, out int status)
         {
             // .NET Framework apps built without a target-framework attribute default to old TLS versions
             ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12 | (SecurityProtocolType)12288; // TLS 1.3
@@ -215,7 +220,8 @@ namespace Harbor
             req.UserAgent = "Harbor/" + SettingsWindow.Version + " (" + SettingsWindow.RepoUrl + ")";
             req.Timeout = 6000;
             req.ReadWriteTimeout = 6000;
-            req.AutomaticDecompression = DecompressionMethods.GZip | DecompressionMethods.Deflate;
+            // gzip only: .NET Framework misreads servers' "deflate" (zlib-wrapped) replies - Open-Meteo sends those
+            req.AutomaticDecompression = DecompressionMethods.GZip;
             try
             {
                 using (var resp = (HttpWebResponse)req.GetResponse())

@@ -81,6 +81,31 @@ Most dock replacements are web apps that run a whole browser in the background. 
 - **Notification Center** shows your real Windows notifications, plus calendar, now-playing and system widgets
 - **Notification banners** appear at the top right in the macOS style instead of Windows' pop-ups. Harbor turns Windows' own banners back on when it quits, and you can switch this off in **Harbor → General**
 
+### The island
+
+Rest the mouse on the centre of the menu bar and a dark panel drops down, like a notch. It never takes keyboard focus from the app you're typing in, and it closes when the mouse moves away.
+
+<p>
+  <img src="docs/screenshots/island_dashboard.png" alt="Island: Dashboard" width="49%">
+  <img src="docs/screenshots/island_media.png" alt="Island: Media with lyrics" width="49%">
+  <img src="docs/screenshots/island_ai.png" alt="Island: AI Coding with a Claude Code permission request" width="49%">
+  <img src="docs/screenshots/island_weather.png" alt="Island: Weather" width="49%">
+</p>
+
+| Tab | What's in it |
+| --- | --- |
+| **Dashboard** | Reminders, your most-used apps today, quick toggles (dark mode, Wi‑Fi, Bluetooth, keep awake, screenshot, lock), Pomodoro, day progress and weather |
+| **Media** | Cover, seek bar and controls, with synced lyrics beside them |
+| **Pomodoro** | Ring timer with Work / Short break / Long break, sessions today, a focus target (one of your reminders) and day progress. While it runs, the time shows in the centre of the menu bar |
+| **Weather** | Now, feels-like, humidity, wind, UV, rain chance, pressure and the next 12 hours, from [Open-Meteo](https://open-meteo.com) for the city you set |
+| **Screen Time** | Today's time per app and per category, counted and kept on your PC |
+| **Reminders** | Quick reminders with optional due times; a banner tells you when one is due |
+| **AI Coding** | Your [Claude Code](https://claude.com/claude-code) sessions with live status (Running / Waiting / Done), model, branch, messages and tokens. When Claude asks permission, the island pops up with **Allow / Always allow / Deny** |
+
+Set your city, working hours, Pomodoro lengths and the Claude Code link in **Harbor → General → Island**.
+
+**Claude Code approvals** work through a [hook](https://code.claude.com/docs/en/hooks): switching them on adds `Harbor.exe --claude-hook` to `%USERPROFILE%\.claude\settings.json` (backed up first, your other hooks untouched). It applies to Claude Code in the terminal, VS Code and other editors. Whichever answers first wins: the island or the editor's own prompt. If Harbor isn't running or you don't answer, Claude Code simply asks you as usual. Switching it off, or uninstalling Harbor, removes the hook again.
+
 ### Customize everything
 
 <p>
@@ -157,6 +182,8 @@ bin\Harbor.exe --install
 | `--cc` | Opens the Control Center (you can bind this to a key in another tool) |
 | `--uninstall` | Removes Harbor |
 | `--snapshot <dir> [--demo]` | Renders the UI to PNG files; `--demo` uses sample data. The README screenshots are made this way |
+| `--claude-hook` | Used by Claude Code's hook: passes the event to the running Harbor (and, for a permission request, returns your answer) |
+| `--lyrics-test <out> <artist> <title> [seconds]`, `--weather-test <out> <city>` | Developer checks: run a lyrics or weather lookup and write the result to a file |
 
 ### How it fits together
 
@@ -170,14 +197,25 @@ bin\Harbor.exe --install
 | `src/SettingsWindow.cs`, `src/Look.cs`, `src/Settings.cs` | The Harbor app and `settings.ini` |
 | `src/ShellIcons.cs` | Icon loading and the WhiteSur-style icon renderer |
 | `src/SystemStatus.cs`, `src/SysInfo.cs`, `src/BtBattery.cs`, `src/WinRT.cs` | Wi‑Fi, audio, brightness, stats, Bluetooth, media and notifications |
+| `src/Island.cs`, `src/NowPlaying.cs` | The island and its tabs; the Now Playing view shared with the media panel |
+| `src/Pomodoro.cs`, `src/Weather.cs`, `src/ScreenTime.cs`, `src/Reminders.cs` | Pomodoro timer, Open-Meteo weather and icons, Screen Time tracking, reminders |
+| `src/ClaudeBridge.cs`, `src/ClaudeHistory.cs` | Claude Code hook, local pipe and settings edit; reading session history |
+| `src/Lyrics.cs`, `src/Banners.cs`, `src/ShellDrag.cs` | LRCLIB lyrics, notification banners, dragging files out of stacks |
 
 ## Privacy
 
 Harbor has no telemetry, analytics or auto-download. **Check for Updates** just opens the Releases page in your browser.
 
-Its only network request is for **song lyrics**. While the Now Playing panel is open, it asks [LRCLIB](https://lrclib.net), a free and open lyrics service, for the current song by sending its title, artist, album and length. You can turn this off with the **Lyrics** button in the panel or in **Harbor → General**.
+Harbor only goes online for two things, and only while you're looking at them:
 
-Notifications, media info and system stats are read locally to draw the UI and are never stored or sent anywhere.
+- **Song lyrics:** while Now Playing or the island's Media tab is open, it asks [LRCLIB](https://lrclib.net), a free and open lyrics service, for the current song by sending its title, artist, album and length. Turn this off with the **Lyrics** button or in **Harbor → General**.
+- **Weather:** if you set a city, it looks the city up once and then asks [Open-Meteo](https://open-meteo.com) (free, no account) for that city's forecast while the Weather tab or Dashboard is open, at most every 20 minutes. Only the city name and its coordinates are sent.
+
+Everything else stays on your PC:
+
+- Notifications, media info and system stats are read locally to draw the UI and are never stored or sent anywhere.
+- **Screen Time** and **Reminders** are saved in `%APPDATA%\Harbor`.
+- **Claude Code** events go from the hook to Harbor over a private local pipe, and its session history is read from your own `.claude` folder.
 
 ## Credits
 

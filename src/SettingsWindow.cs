@@ -73,6 +73,24 @@ namespace Harbor
         static void Live() { App.ApplyLive(); }
         static void Full() { App.ApplySettings(); }
 
+        bool weatherBusy;
+        string weatherNote, claudeNote;
+
+        void SaveCity()
+        {
+            if (weatherBusy) return;
+            weatherBusy = true;
+            weatherNote = null;
+            FocusField = null;
+            Weather.SetCity(Field("wcity"), err =>
+            {
+                weatherBusy = false;
+                weatherNote = err ?? (Weather.HasCity ? "Weather for " + Weather.Place : "Weather is off");
+                Refresh2();
+            });
+            Refresh2();
+        }
+
         static void Int(UI ui, string key, string label, int min, int max, string unit)
         {
             ui.ValueSlider(key, label, Look.Int(key), min, max, unit, v => { Look.Set(key, v); Live(); });
@@ -112,7 +130,7 @@ namespace Harbor
             cardTop = -1;
         }
 
-        public const string Version = "0.1.6";
+        public const string Version = "0.2.0";
         public const string RepoUrl = "https://github.com/hritik-sharmaa/harbor";
         static readonly string[] pageInfo =
         {
@@ -237,6 +255,35 @@ namespace Harbor
             Toggle(ui, "NcWidgets", "Widgets in Notification Center", "Calendar, now playing, CPU / memory / battery");
             Toggle(ui, "Banners", "Harbor notification banners", "Shows notifications at the top right instead of Windows' pop-ups");
             Toggle(ui, "Lyrics", "Song lyrics in Now Playing", "From lrclib.net: sends the song's title, artist and length while the panel is open");
+
+            Card(ui, "Island");
+            Toggle(ui, "Island", "Island in the centre of the menu bar", "Rest the mouse there for Media, Pomodoro, Weather and Screen Time");
+            if (Look.Bool("Island"))
+            {
+                ui.Info("Weather city (forecasts from Open-Meteo: free, no account)");
+                if (!Fields.ContainsKey("wcity")) Fields["wcity"] = Look.Get("WeatherCity");
+                ui.TextField("wcity", "Type your city, e.g. Mumbai", false, SaveCity);
+                ui.Button("wsave", weatherBusy ? "Looking it up…" : "Save City", SaveCity, false, true);
+                if (weatherNote != null) ui.Info(weatherNote);
+                ui.Choice("wunit", new[] { "°C, km/h", "°F, mph" }, Weather.Fahrenheit ? 1 : 0, i => Weather.SetUnit(i == 1));
+                Int(ui, "DayStart", "Day progress: my day starts at", 0, 23, ":00");
+                Int(ui, "DayEnd", "Day progress: my day ends at", 1, 24, ":00");
+                Int(ui, "PomoWork", "Pomodoro: focus", 5, 90, " min");
+                Int(ui, "PomoShort", "Pomodoro: short break", 1, 30, " min");
+                Int(ui, "PomoLong", "Pomodoro: long break", 5, 60, " min");
+                ui.ToggleRow("stime", "Screen Time", Look.Bool("ScreenTime"), v => { Look.Set("ScreenTime", v); Settings.Save(); if (v) ScreenTime.Init(); }, "Time per app, counted and kept on this PC only");
+            }
+
+            Card(ui, "Claude Code");
+            ui.ToggleRow("claudehook", "Live sessions and Allow / Deny in the island", ClaudeBridge.HooksOn, v =>
+            {
+                string err = ClaudeBridge.SetHooks(v, Application.ExecutablePath);
+                claudeNote = err != null ? "Couldn't update Claude Code's settings: " + err
+                    : v ? "On. Restart Claude Code sessions (or reload VS Code) to pick it up." : "Off. Harbor's hook was removed from Claude Code's settings.";
+                Refresh2();
+            }, "Adds a hook to %USERPROFILE%\\.claude\\settings.json (backed up first); removed again when you switch this off or uninstall");
+            if (claudeNote != null) ui.Info(claudeNote);
+            Toggle(ui, "ClaudeBanners", "Banner when Claude finishes", "Shows which project is done and Claude's last message");
 
             Card(ui, "Hot corners");
             string[] acts = { "none", "taskview", "notifications", "control", "desktop", "lock" };

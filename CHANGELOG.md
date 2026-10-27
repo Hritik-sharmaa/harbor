@@ -1,5 +1,23 @@
 # Changelog
 
+## 0.2.0 — 2026-10-27 (preview)
+
+**New: the island.** Rest the mouse on the centre of the menu bar and a dark panel drops down, like a notch. It never takes keyboard focus from the app you're typing in, and it closes when the mouse moves away. Tabs:
+
+- **Dashboard:** reminders, your most-used apps today, quick toggles (dark mode, Wi‑Fi, Bluetooth, keep awake, screenshot, lock), Pomodoro, day progress and weather.
+- **Media:** cover, seek bar and controls with synced lyrics beside them.
+- **Pomodoro:** ring timer with Work / Short break / Long break, a long break after every 4 sessions, sessions today, a focus target (one of your reminders), day progress, and a banner when time's up. While it runs, the time shows in the centre of the menu bar.
+- **Weather:** from Open-Meteo for the city you set in **Harbor → General → Island**. Shows now, feels-like, humidity, wind, UV, rain chance, pressure, the next 12 hours, sunrise and sunset, with colour icons.
+- **Screen Time:** today's time per app and per category, with a donut chart. Idle, locked and asleep time isn't counted, and it's kept on your PC.
+- **Reminders:** quick reminders with optional due times (in 30 min, in 1 hour, this evening, tomorrow); a banner tells you when one is due.
+- **AI Coding:** your Claude Code sessions with live status (Running / Waiting / Done), model, branch, messages and tokens. When Claude asks permission, the island pops up with **Allow / Always allow / Deny**. This works through a Claude Code hook that you switch on in **Harbor → General → Claude Code**: it's added to `%USERPROFILE%\.claude\settings.json` (backed up, other hooks untouched) and removed again when you switch it off or uninstall. If Harbor isn't running or you don't answer, Claude Code asks you as usual. Optional banner when Claude finishes.
+
+**Also**
+- Harbor's own banners (Pomodoro, reminders, Claude) use the same macOS-style banners as your notifications.
+- The Now Playing panel and the island share one Now Playing view.
+- Fixed: setting a weather city failed because Open-Meteo's compressed ("deflate") replies were misread. Harbor now asks for gzip only.
+- Idle cost is unchanged: about 0.1% CPU and 27 MB RAM.
+
 ## 0.1.6 — 2026-10-26 (preview)
 
 **New**

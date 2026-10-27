@@ -415,23 +415,35 @@ namespace Harbor
                 // ---------------- centre: now playing (+ clock in island style)
                 bool showMedia = Look.Bool("BarShowMedia") && Media.Has && Media.Playing;
                 float mw = showMedia ? Math.Min(Measure(g, Media.Title, small) + 40 * S, 260 * S) : 0;
+                bool island = Look.Bool("Island");
+                bool showPomo = island && (Pomodoro.Running || Pomodoro.Progress > 0);
+                string pomoText = showPomo ? ((int)Pomodoro.Remaining.TotalMinutes).ToString("00") + ":" + Pomodoro.Remaining.Seconds.ToString("00") : null;
+                float pomoW = showPomo ? Measure(g, pomoText, small) + 36 * S : 0;
+                mw += pomoW;
                 float cw = (clock != null && !clockRight) ? Measure(g, clock, bold) + 22 * S : 0;
                 float centerW = mw + cw + (mw > 0 || cw > 0 ? ip * 2 : 0);
                 float cx = W / 2f - centerW / 2;
                 if (cx < lx0 + leftW + 10 * S) cx = lx0 + leftW + 10 * S;
                 if (centerW > 0 && cx + centerW > rightX - 10 * S)
                 {
-                    showMedia = false; mw = 0; centerW = cw + (cw > 0 ? ip * 2 : 0);
+                    showMedia = showPomo = false; mw = pomoW = 0; centerW = cw + (cw > 0 ? ip * 2 : 0);
                     cx = Math.Min(cx, rightX - 10 * S - centerW);
                 }
                 float c = cx + ip;
-                Zone media = null;
+                Zone media = null, pomo = null;
+                if (showPomo)
+                {
+                    pomo = AddZone("pomo", c, pomoW, z => global::Harbor.Island.Open(this, z.R, "pomodoro"));
+                    c += pomoW;
+                }
                 if (showMedia)
                 {
-                    media = AddZone("media", c, mw, z => MediaFlyout.Toggle(this, z.R),
-                        () => Media.Title + (string.IsNullOrEmpty(Media.Artist) ? "" : " — " + Media.Artist));
-                    c += mw;
+                    media = AddZone("media", c, mw - pomoW, z => { if (island) global::Harbor.Island.Open(this, z.R, "media"); else MediaFlyout.Toggle(this, z.R); },
+                        island ? null : (Func<string>)(() => Media.Title + (string.IsNullOrEmpty(Media.Artist) ? "" : " — " + Media.Artist)));
+                    c += mw - pomoW;
                 }
+                // nothing in the middle: an invisible strip still opens the island, like a notch
+                if (island && centerW <= 0) AddZone("island", W / 2f - 120 * S, 240 * S, z => global::Harbor.Island.Open(this, z.R, null));
                 if (cw > 0)
                     clk = AddZone("clock", c, cw, z => NotificationCenter.Toggle(this, z.R), () => DateTime.Now.ToString("D", CultureInfo.CurrentCulture));
 
@@ -460,6 +472,7 @@ namespace Harbor
                 {
                     bool open = z.Id == openId;
                     if (!open && z.Id != hoverId) continue;
+                    if (z.Id == "island") continue; // the empty centre stays invisible
                     float hy = iy + Math.Max(3 * S, ih * 0.14f);
                     var r = new RectangleF(z.R.X + 1 * S, hy, z.R.Width - 2 * S, ih - (hy - iy) * 2);
                     float hr = IslandStyle ? r.Height / 2 : Math.Min(r.Height / 2, 6 * S);
@@ -490,6 +503,17 @@ namespace Harbor
                     if (SysInfo.CamInUse) using (var b = new SolidBrush(Color.FromArgb(255, 48, 209, 88))) g.FillEllipse(b, dx + 2.5f * S, iy + ih / 2 - dd / 2, dd, dd);
                 }
 
+                if (pomo != null)
+                {
+                    using (var pb = new SolidBrush(Pomodoro.Current == Pomodoro.Phase.Work ? Color.FromArgb(255, 232, 160, 96) : Color.FromArgb(255, 100, 200, 160)))
+                    {
+                        // a tiny progress ring, then the time left
+                        float rd = 11 * S, rx = pomo.R.X + 8 * S, ry = iy + ih / 2 - rd / 2;
+                        using (var tp = new Pen(Color.FromArgb(60, text), 2 * S)) g.DrawEllipse(tp, rx, ry, rd, rd);
+                        using (var ap = new Pen(pb.Color, 2 * S)) if (Pomodoro.Progress > 0) g.DrawArc(ap, rx, ry, rd, rd, -90, 360 * Pomodoro.Progress);
+                    }
+                    g.DrawString(pomoText, small, Pomodoro.Running ? brush : dim, new RectangleF(pomo.R.X + 24 * S, iy + 0.5f * S, pomo.R.Width - 28 * S, ih), lf);
+                }
                 if (media != null)
                 {
                     using (var mb = new SolidBrush(Theme.Accent))
@@ -818,6 +842,7 @@ namespace Harbor
             if (id != hoverId)
             {
                 hoverId = id;
+                ArmIsland(id);
                 Tip.Hide();
                 tipTimer.Stop();
                 if (z != null && z.Tip != null && !Flyout.AnyOpen) tipTimer.Start();
@@ -825,8 +850,33 @@ namespace Harbor
             }
         }
 
+        // ---- the island opens when the mouse rests on the centre of the bar for a moment
+        Timer islandTimer;
+        string islandArmed;
+
+        void ArmIsland(string id)
+        {
+            bool trigger = (id == "media" || id == "pomo" || id == "island") && Look.Bool("Island");
+            if (!trigger) { if (islandTimer != null) islandTimer.Stop(); islandArmed = null; return; }
+            islandArmed = id;
+            if (islandTimer == null)
+            {
+                islandTimer = new Timer { Interval = 300 };
+                islandTimer.Tick += delegate
+                {
+                    islandTimer.Stop();
+                    if (islandArmed == null || hoverId != islandArmed) return;
+                    var z = zones.Find(q => q.Id == islandArmed);
+                    if (z != null) global::Harbor.Island.Open(this, z.R, islandArmed == "media" ? "media" : islandArmed == "pomo" ? "pomodoro" : null);
+                };
+            }
+            islandTimer.Stop();
+            islandTimer.Start();
+        }
+
         protected override void OnMouseLeave(EventArgs e)
         {
+            ArmIsland(null);
             tipTimer.Stop();
             Tip.Hide();
             if (hoverId != null) { hoverId = null; RenderBar(); }

@@ -106,6 +106,7 @@ namespace Harbor
             };
             TrayService.Changed += RenderBars;
             Volume.Changed += RenderBars;
+            Pomodoro.Changed += RenderBars; // the timer in the centre of the bar (once a second, only while it runs)
             Media.Changed += RenderBars;
             Radios.Changed += delegate { RenderBars(); if (Flyout.Current != null) Flyout.Current.Refresh2(); };
             Tracker.ForegroundChanged += WatchForeground;
@@ -136,6 +137,10 @@ namespace Harbor
             BtBattery.Init();
             RegisterHotkeys();
             Banners.Apply();
+            ScreenTime.Init();
+            Reminders.Init();
+            ClaudeBridge.Start();
+            ClaudeBridge.Asked += Island.Attention;
             WatchForeground();
             foreach (var d in Displays) d.Bar.RenderBar();
             ScheduleRelayoutAfter(1500); // the taskbar's auto-hide switch is asynchronous
@@ -658,6 +663,7 @@ namespace Harbor
             shuttingDown = true;
             if (locHook != IntPtr.Zero) { N.UnhookWinEvent(locHook); locHook = IntPtr.Zero; }
             try { Banners.RestoreWindows(); } catch { }
+            try { ScreenTime.Shutdown(); } catch { }
             try { TrayService.Stop(); } catch { }
             try { Gamma.ResetAll(); } catch { }
             try { Taskbar.Apply(false); } catch { }
@@ -717,6 +723,8 @@ namespace Harbor
             shots.Add(new KeyValuePair<string, Flyout>("f_menu", mf));
             shots.Add(new KeyValuePair<string, Flyout>("f_nc", new NotificationCenter()));
             shots.Add(new KeyValuePair<string, Flyout>("f_sys", new SystemFlyout()));
+            foreach (var t in new[] { "dashboard", "media", "pomodoro", "weather", "screentime", "reminders", "ai" })
+                shots.Add(new KeyValuePair<string, Flyout>("island_" + t, Island.ForSnapshot(t)));
             foreach (int pg in new[] { 0, 1, 2, 3, 4, 6 }) shots.Add(new KeyValuePair<string, Flyout>("w_settings" + pg, new SettingsWindow { Page = pg }));
             // give async sources (radios, media, bluetooth list) a moment to arrive
             var wait = new System.Windows.Forms.Timer { Interval = 2500 };
@@ -799,6 +807,12 @@ namespace Harbor
             BtBattery.ConnectedName = "AirPods Pro";
             BtBattery.ConnectedLevel = 85;
             NotificationCenter.Demo = true;
+            Weather.UseDemo();
+            ScreenTime.UseDemo();
+            Pomodoro.UseDemo();
+            Reminders.UseDemo();
+            ClaudeHistory.UseDemo();
+            ClaudeBridge.UseDemo();
             foreach (var d in Displays) d.Bar.RenderBar();
         }
 
@@ -868,6 +882,13 @@ namespace Harbor
         [STAThread]
         static void Main(string[] args)
         {
+            // Claude Code runs us as a hook: forward the event and exit, before anything else starts
+            if (Array.IndexOf(args, "--claude-hook") >= 0) { ClaudeBridge.RunHook(); return; }
+            // developer check: add / remove Harbor's hooks in a copy of a settings file
+            int ht = Array.IndexOf(args, "--claude-hooks-test");
+            if (ht >= 0 && ht + 2 < args.Length) { ClaudeBridge.SetHooks(args[ht + 2] == "on", Application.ExecutablePath, args[ht + 1]); return; }
+            int wt = Array.IndexOf(args, "--weather-test");
+            if (wt >= 0 && wt + 2 < args.Length) { Weather.Test(args[wt + 1], args[wt + 2]); return; }
             int lt = Array.IndexOf(args, "--lyrics-test");
             if (lt >= 0 && lt + 3 < args.Length)
             {

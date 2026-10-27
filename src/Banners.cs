@@ -263,6 +263,21 @@ namespace Harbor
         static readonly List<BannerForm> live = new List<BannerForm>();  // everything still animating, incl. fading out
         static Timer anim;
 
+        /// <summary>A banner from Harbor itself (Pomodoro, Claude Code...). Quiet during Do Not Disturb / fullscreen like the rest.</summary>
+        public static void ShowLocal(string app, string title, string body)
+        {
+            var d = App.PrimaryDisplay;
+            if (d == null || Quiet()) return;
+            while (shown.Count >= MaxShown) shown[shown.Count - 1].Dismiss();
+            var f = new BannerForm(d, 0, null, app, title, body ?? "");
+            shown.Insert(0, f);
+            live.Add(f);
+            Layout(true);
+            f.Appear();
+            if (anim == null) { anim = new Timer { Interval = 15 }; anim.Tick += delegate { Animate(); }; }
+            anim.Start();
+        }
+
         static void Show(UserNotification n, string aumid)
         {
             var d = App.PrimaryDisplay;

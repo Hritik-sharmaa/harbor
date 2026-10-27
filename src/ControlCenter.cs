@@ -254,7 +254,7 @@ namespace Harbor
         }
 
         /// <summary>Switches Windows (apps + system) between light and dark, like the macOS Dark Mode button.</summary>
-        void ToggleDarkMode()
+        internal static void ToggleDarkMode()
         {
             bool toDark = !Theme.Dark;
             try

@@ -57,6 +57,7 @@ namespace Harbor
                 var cp = base.CreateParams;
                 cp.Style = N.WS_POPUP | (WindowMode ? 0x00020000 /*WS_MINIMIZEBOX*/ : 0);
                 cp.ExStyle |= WindowMode ? N.WS_EX_APPWINDOW : (N.WS_EX_TOOLWINDOW | N.WS_EX_TOPMOST);
+                if (NoActivate) cp.ExStyle |= N.WS_EX_NOACTIVATE;
                 cp.ClassStyle |= 0x20000; // CS_DROPSHADOW
                 return cp;
             }
@@ -68,9 +69,14 @@ namespace Harbor
             N.RoundCorners(Handle);
         }
 
+        /// <summary>Opens and takes clicks without taking keyboard focus from the app you're typing in (hover panels).</summary>
+        protected bool NoActivate;
+        protected override bool ShowWithoutActivation { get { return NoActivate; } }
+
         protected override void WndProc(ref Message m)
         {
             if (m.Msg == N.WM_DPICHANGED) return;
+            if (NoActivate && m.Msg == N.WM_MOUSEACTIVATE) { m.Result = (IntPtr)N.MA_NOACTIVATE; return; }
             if (WindowMode && m.Msg == 0x84 /*WM_NCHITTEST*/)
             {
                 base.WndProc(ref m);
@@ -124,6 +130,7 @@ namespace Harbor
             OnOpened();
             Render(true);
             Show();
+            if (NoActivate) return;
             Activate();
             N.SetForegroundWindow(Handle);
         }

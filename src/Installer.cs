@@ -154,6 +154,7 @@ namespace Harbor
             }
             catch { }
             try { if (File.Exists(ShortcutPath)) File.Delete(ShortcutPath); } catch { }
+            try { if (ClaudeBridge.HooksInstalled()) ClaudeBridge.SetHooks(false, null); } catch { } // leave Claude Code as we found it
             try { Registry.CurrentUser.DeleteSubKeyTree(UninstallKey, false); } catch { }
         }
 
