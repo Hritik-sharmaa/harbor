@@ -13,6 +13,7 @@ namespace Harbor
     {
         public static Dictionary<string, int> Levels = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         public static string ConnectedName;
+        public static bool Demo;
         public static int ConnectedLevel = -1;
         public static event Action Changed;
 
@@ -84,6 +85,7 @@ namespace Harbor
                                 int v = LevelFor(d.Name);
                                 if (v >= 0) { name = d.Name; level = v; break; }
                             }
+                        if (Demo) return; // --snapshot --demo: keep the sample earbuds
                         bool changed = name != ConnectedName || level != ConnectedLevel;
                         ConnectedName = name;
                         ConnectedLevel = level;

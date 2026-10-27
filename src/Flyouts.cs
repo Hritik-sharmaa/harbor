@@ -34,18 +34,57 @@ namespace Harbor
         protected override void OnClosedFlyout()
         {
             poll.Stop();
+            spin.Stop();
+            scanning = false;
             Fields.Clear(); // never keep a typed password around
+        }
+
+        // ---- refresh: ask Windows to scan for networks again (takes a few seconds)
+        readonly Timer spin = new Timer { Interval = 30 };
+        bool scanning;
+        int scanStart;
+
+        void Rescan()
+        {
+            if (scanning) return;
+            scanning = true;
+            scanStart = Environment.TickCount;
+            Wifi.Scan();
+            if (spin.Tag == null)
+            {
+                spin.Tag = true;
+                spin.Tick += delegate
+                {
+                    if (Environment.TickCount - scanStart > 4000) { spin.Stop(); scanning = false; Wifi.LoadNetworks(); }
+                    Refresh2();
+                };
+            }
+            spin.Start();
         }
 
         protected override void Build(UI ui)
         {
+            float hy = ui.Y;
             ui.Header("Wi-Fi", Radios.HasWifi ? Radios.WifiOn : (bool?)null, on => { Radios.SetWifi(on); status = null; });
+            if (!Radios.HasWifi || Radios.WifiOn)
+            {
+                // refresh button, left of the on/off switch
+                var rb = new RectangleF(ui.Right - (Radios.HasWifi ? 84 : 40) * S, hy + 4 * S, 28 * S, 28 * S);
+                if (Hover == "rescan" || scanning) ui.Fill(rb, Theme.TileHover, 14 * S);
+                var st = ui.G.Save();
+                ui.G.TranslateTransform(rb.X + rb.Width / 2, rb.Y + rb.Height / 2);
+                if (scanning) ui.G.RotateTransform((Environment.TickCount - scanStart) * 0.36f % 360);
+                ui.Glyph("", new RectangleF(-rb.Width / 2, -rb.Height / 2, rb.Width, rb.Height), ui.Icon, ui.TextBrush);
+                ui.G.Restore(st);
+                ui.AddHit("rescan", rb, Rescan, true);
+            }
             if (Radios.HasWifi && !Radios.WifiOn)
             {
                 ui.Info("Wi-Fi is turned off");
             }
             else
             {
+                if (scanning) ui.Info("Scanning for networks…");
                 var nets = Wifi.Networks;
                 var conn = nets.Find(n => n.Connected);
                 if (conn != null)

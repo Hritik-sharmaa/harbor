@@ -1,5 +1,27 @@
 # Changelog
 
+## 0.2.1 — 2026-10-27 (preview)
+
+**New look**
+- Every panel is dark frosted glass like the notch: the Control Center, Wi‑Fi, Bluetooth, Sound, Calendar, Battery, Notification Center, menus and folder stacks. Each has a glossy sheen, a soft light rim, 16 px rounded corners and glass tiles.
+- The notch attaches to the menu bar (square top, round bottom), grows down when it opens and folds back up when it closes.
+- A calmer Dashboard: three widgets (Up next, Focus, Weather) over one slim strip of apps and quick toggles.
+- The Harbor app window has a dark background with soft glows, a frosted sidebar with a glossy selection, glass cards and glass segmented controls.
+- A new app icon: a dark glass tile with the island at the top and a glass dock at the bottom.
+
+**Claude Code**
+- Approvals now work in VS Code, Antigravity and other editors that keep Claude Code's settings in their own folder (`.claude-vscode`, `.claude-antigravity`, `.claude-work`…). Harbor adds its hook to every Claude settings folder it finds, including new ones as they appear, and shows sessions from all of them.
+- Questions (AskUserQuestion) appear in the notch with their options. Click one to answer; multi-select questions have a Send button; several questions are answered in turn. **Answer in editor** leaves it to the editor's own dialog.
+
+**Better**
+- Lyrics are found far more often. LRCLIB is retried when it's busy, matching no longer requires the album, tries the main artist alone and cleans up titles, and lyrics are remembered on your PC so repeat songs show them instantly. There's a Try again / Search again button.
+- Pause, play and skip react immediately in the notch, and song changes appear as soon as Spotify has the new details.
+- Wi‑Fi panel: a refresh button to scan for networks again.
+
+**Fixed**
+- Opening the notch no longer brings up an auto-hidden dock.
+- A faint line across the middle of glass panels, where the sheen ended.
+
 ## 0.2.0 — 2026-10-27 (preview)
 
 **New: the island.** Rest the mouse on the centre of the menu bar and a dark panel drops down, like a notch. It never takes keyboard focus from the app you're typing in, and it closes when the mouse moves away. Tabs:

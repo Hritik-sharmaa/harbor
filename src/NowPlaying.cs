@@ -52,10 +52,12 @@ namespace Harbor
         }
 
         /// <summary>The cover art blurred into a colour wash, darkened so white text always reads.</summary>
-        public void Backdrop(Graphics g, RectangleF r)
+        /// <param name="opacity">255 for a solid panel; less on frosted glass, so the blurred desktop shows through the colours.</param>
+        public void Backdrop(Graphics g, RectangleF r, int opacity = 255)
         {
-            // a solid base first: the shrunken cover has soft see-through edges that would let the desktop show through
-            using (var basis = new SolidBrush(Color.FromArgb(255, 16, 16, 20))) g.FillRectangle(basis, r);
+            float a = opacity / 255f;
+            // a base first: the shrunken cover has soft see-through edges that would otherwise let the desktop show through
+            using (var basis = new SolidBrush(Color.FromArgb(opacity, 16, 16, 20))) g.FillRectangle(basis, r);
             if (Media.Art != null && Media.Has)
             {
                 if (ambientSrc != Media.Art)
@@ -69,13 +71,14 @@ namespace Harbor
                 using (var ia = new System.Drawing.Imaging.ImageAttributes())
                 {
                     ia.SetWrapMode(WrapMode.TileFlipXY); // no dark seams at the edges
+                    if (opacity < 255) ia.SetColorMatrix(new System.Drawing.Imaging.ColorMatrix { Matrix33 = a * 0.9f });
                     g.DrawImage(ambient, Rectangle.Round(RectangleF.Inflate(r, r.Width * 0.15f, r.Height * 0.15f)), 0, 0, ambient.Width, ambient.Height, GraphicsUnit.Pixel, ia);
                 }
                 g.InterpolationMode = mode;
             }
             else
-                using (var br = new LinearGradientBrush(r, Color.FromArgb(255, 70, 60, 130), Color.FromArgb(255, 150, 60, 110), 60f)) g.FillRectangle(br, r);
-            using (var shade = new LinearGradientBrush(r, Color.FromArgb(120, 0, 0, 0), Color.FromArgb(175, 0, 0, 0), 90f))
+                using (var br = new LinearGradientBrush(r, Color.FromArgb(opacity, 70, 60, 130), Color.FromArgb(opacity, 150, 60, 110), 60f)) g.FillRectangle(br, r);
+            using (var shade = new LinearGradientBrush(r, Color.FromArgb((int)(120 * a), 0, 0, 0), Color.FromArgb((int)(175 * a), 0, 0, 0), 90f))
                 g.FillRectangle(shade, r);
         }
 
@@ -154,7 +157,24 @@ namespace Harbor
                     : lyr == null || lyr.NotFound ? "No lyrics found for this song"
                     : lyr.Failed ? "Couldn't reach the lyrics service"
                     : lyr.Instrumental ? "♪  Instrumental" : null;
-                if (note != null) { ui.Text(note, box, body, db, 1); return true; }
+                if (note != null)
+                {
+                    bool canRetry = lyr != null && (lyr.Failed || lyr.NotFound);
+                    if (!canRetry) { ui.Text(note, box, body, db, 1); return true; }
+                    // not found / unreachable: say so, and offer to look again
+                    float mid = box.Y + box.Height / 2;
+                    ui.Text(note, new RectangleF(box.X, mid - 30 * S, box.Width, 22 * S), body, db, 1);
+                    using (var sf = new Font(Fonts.Ui, 12f * S, GraphicsUnit.Pixel))
+                    {
+                        string label = lyr.Failed ? "Try again" : "Search again";
+                        float w = ui.G.MeasureString(label, sf).Width + 26 * S;
+                        var pill = new RectangleF(box.X + (box.Width - w) / 2, mid, w, 26 * S);
+                        ui.Fill(pill, Color.FromArgb(host.Hover == "lyRetry" ? 60 : 34, 255, 255, 255), 13 * S);
+                        using (var wb = new SolidBrush(White)) ui.Text(label, pill, sf, wb, 1);
+                        ui.AddHit("lyRetry", pill, Harbor.Lyrics.Retry, true);
+                    }
+                    return true;
+                }
                 if (lyr.Synced != null) { Synced(ui, host, box, lyr.Synced, fontPx); return true; }
                 using (var f = new Font(Fonts.UiBold, fontPx * 0.85f * S, GraphicsUnit.Pixel))
                 using (var sf = new StringFormat { Trimming = StringTrimming.EllipsisWord })
@@ -288,7 +308,7 @@ namespace Harbor
             if (state != Lyrics.State.Off)
                 h += 8 + (lyr != null && lyr.Synced != null ? LyricsBoxH : (plain != null ? plainH + 26 : 48)) + 22;
             h += 6;
-            view.Backdrop(ui.G, new RectangleF(0, 0, W, h * S));
+            view.Backdrop(ui.G, new RectangleF(0, 0, W, h * S), Acrylic ? 170 : 255); // see-through on glass, like the island
 
             float y = Margin * S;
             var art = new RectangleF(m, y, ArtSize * S, ArtSize * S);

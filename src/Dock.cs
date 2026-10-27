@@ -170,6 +170,7 @@ namespace Harbor
         {
             this.back = back;
             Disp = disp;
+            Flyout.AnyClosed += () => { if (!IsDisposed) Kick(); }; // our menu closed: hide again if we should
             Owner = back; // owned => always drawn above the blur layer
             FormBorderStyle = FormBorderStyle.None;
             ShowInTaskbar = false;
@@ -537,8 +538,13 @@ namespace Harbor
         }
 
         /// <summary>Opens a flyout next to an item, on the side facing the screen.</summary>
+        // the menu or stack this dock opened: only that keeps an auto-hidden dock up (not the island or the bar's panels)
+        Flyout ownPanel;
+        bool MenuOpen { get { return ownPanel != null && ownPanel.Visible; } }
+
         public void OpenBeside(Flyout f, DockItem it)
         {
+            ownPanel = f;
             var r = ItemScreenRect(it);
             if (pos == "left") f.Open(new Rectangle(r.Right + (int)(8 * S), r.Y, 0, 0), false, 0, S, null);
             else if (pos == "right") f.Open(new Rectangle(r.X - (int)(8 * S), r.Y, 0, 0), false, 2, S, null);
@@ -785,7 +791,7 @@ namespace Harbor
                     DrawIcon(g, dragItem, dr.X, dr.Y, sz, false, dragRemove ? 0.45f : 0.9f);
                     if (dragRemove) DrawLabel(g, "Remove", dr);
                 }
-                else if (hoverIdx >= 0 && hoverIdx < items.Count && !PopMenu.IsOpen && !Previews.ShowingFor(this) && (mag > 0.3f || !Settings.Magnify))
+                else if (hoverIdx >= 0 && hoverIdx < items.Count && !MenuOpen && !Previews.ShowingFor(this) && (mag > 0.3f || !Settings.Magnify))
                 {
                     var it = items[hoverIdx];
                     DrawLabel(g, it.Name, MapR(new RectangleF(it.X, it.Y, it.Size, it.Size)));
@@ -922,7 +928,7 @@ namespace Harbor
 
             float bandTop = panelTop + off - (M - B) * Smooth(mag) - 8 * S;
             bool overDock = hovering && mx >= panelL - 2 && mx <= panelR + 2 && my >= bandTop;
-            float magTarget = (Settings.Magnify && (overDock || dragging) && !PopMenu.IsOpen && shown > 0.6f) ? 1 : 0;
+            float magTarget = (Settings.Magnify && (overDock || dragging) && !MenuOpen && shown > 0.6f) ? 1 : 0;
             if (mag != magTarget)
             {
                 mag += (magTarget - mag) * (float)(1 - Math.Exp(-dt / 55.0));
@@ -933,7 +939,7 @@ namespace Harbor
             float showTarget = 1;
             if (Settings.AutoHide && !App.SnapshotMode)
             {
-                bool keep = hovering || dragging || PopMenu.IsOpen || pressIdx >= 0 || (Look.Bool("DockSmartHide") && !overlapped);
+                bool keep = hovering || dragging || MenuOpen || pressIdx >= 0 || (Look.Bool("DockSmartHide") && !overlapped);
                 if (keep) lastKeep = now;
                 else if (now - lastKeep < 450) active = true; // waiting out the hide delay
                 showTarget = (keep || now - lastKeep < 450) ? 1 : 0;
@@ -1145,6 +1151,7 @@ namespace Harbor
             if (pos == "left") m.Show(r.Right + (int)(8 * S), r.Y, N.TPM_LEFTALIGN);
             else if (pos == "right") m.Show(r.X - (int)(8 * S), r.Y, N.TPM_RIGHTALIGN);
             else m.Show(r.X + r.Width / 2, winY + (int)(panelTop + off - 6 * S), N.TPM_CENTERALIGN | N.TPM_BOTTOMALIGN);
+            ownPanel = Flyout.Current;
         }
 
         void ItemMenu(DockItem it)

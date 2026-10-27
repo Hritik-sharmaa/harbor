@@ -35,7 +35,7 @@ namespace Harbor
         {
             NoActivate = true;
             LogicalWidth = 680;
-            FixedLogicalHeight = 272;
+            FixedLogicalHeight = 284;
             tab = Array.IndexOf(tabs, Look.Get("IslandTab")) >= 0 ? Look.Get("IslandTab") : "media";
             Media.Changed += delegate { if (Visible && tab == "media") Refresh2(); };
             Lyrics.Changed += delegate { view.Snap(); if (Visible && tab == "media") Refresh2(); };
@@ -45,6 +45,7 @@ namespace Harbor
             ClaudeBridge.Changed += delegate { if (Visible) Refresh2(); };
             ClaudeHistory.Changed += delegate { if (Visible && tab == "ai") Refresh2(); };
             tick.Tick += delegate { Tick(); };
+            shapeAnim.Tick += delegate { AnimateShape(); };
             watch.Tick += delegate { Watch(); };
         }
 
@@ -63,7 +64,12 @@ namespace Harbor
             if (startTab != null) inst.SetTab(startTab, false);
             var sb = bar.ScreenBounds;
             inst.trigger = new RectangleF(sb.X + zone.X, sb.Y, zone.Width, sb.Height + 2);
-            if (inst.Visible) { inst.Refresh2(); return; }
+            if (inst.Visible)
+            {
+                if (inst.closing) { inst.closing = false; inst.shapeAnim.Start(); } // was folding away: grow back
+                inst.Refresh2();
+                return;
+            }
             var center = new RectangleF(sb.Width / 2f - 1, 0, 2, sb.Height);
             inst.ShowBelow(bar, center, "island", 1);
         }
@@ -80,15 +86,21 @@ namespace Harbor
         protected override void OnOpened()
         {
             outsideMs = 0;
+            // the glass is always dark here, whatever the Windows theme (AABBGGRR)
+            if (Acrylic) N.SetAccent(Handle, 4, unchecked((int)0x700C0A0A));
             Media.WantTimeline = tab == "media";
             if (tab == "media") Media.RefreshTimeline();
             view.Snap();
             tick.Start();
             watch.Start();
+            Grow();
         }
 
         protected override void OnClosedFlyout()
         {
+            shapeAnim.Stop();
+            closing = false;
+            reveal = 1;
             tick.Stop();
             watch.Stop();
             Media.WantTimeline = false;
@@ -105,7 +117,7 @@ namespace Harbor
             // stay while you're over it, typing a reminder, or Claude is waiting for your answer
             if (me.Contains(p) || RectangleF.Inflate(trigger, 6, 0).Contains(p) || Dragging != null || FocusField != null || ClaudeBridge.Pending.Count > 0) { outsideMs = 0; return; }
             outsideMs += watch.Interval;
-            if (outsideMs >= 400) CloseFlyout();
+            if (outsideMs >= 400) Shrink();
         }
 
         /// <summary>Redraw only what moves: lyrics at 30 fps while gliding, the song and timer a few times a second.</summary>
@@ -144,16 +156,108 @@ namespace Harbor
 
         // ------------------------------------------------------------------ layout
 
-        const float Pad = 22, TabBarH = 50;
+        const float Pad = 22, TabBarH = 58; // the tab bar gets its own breathing room below the content
+
+        // ------------------------------------------------------------------ the notch: shape, glass, open / close
+
+        protected override float GapBelowBar { get { return 0; } } // attached to the menu bar, like a notch
+        float Radius { get { return 26 * S; } }
+
+        protected override void OnHandleCreated(EventArgs e)
+        {
+            base.OnHandleCreated(e);
+            int none = 1; // DWMWCP_DONOTROUND: our own shape (square top, round bottom) instead of Windows' small corners
+            try { N.DwmSetWindowAttribute(Handle, 33, ref none, 4); } catch { }
+        }
+
+        readonly Timer shapeAnim = new Timer { Interval = 15 };
+        float reveal = 1;          // 0..1: how much of the notch has grown down out of the menu bar
+        bool closing;
+
+        /// <summary>Clips the window to the notch: square where it meets the menu bar, round at the bottom, 'reveal' of its height.</summary>
+        protected override bool OwnGlass { get { return true; } }
+
+        protected override void ApplyShape()
+        {
+            if (!IsHandleCreated) return;
+            int w = Width, h = Height, r = (int)Radius;
+            float e = 1 - (1 - reveal) * (1 - reveal) * (1 - reveal); // ease-out
+            int vis = Math.Max(2, (int)Math.Round(h * e));
+            N.SetWindowRgn(Handle, N.CreateRoundRectRgn(0, -r * 2, w + 1, vis + 1, r * 2, r * 2), true);
+        }
+
+        protected override void OnSizeChanged(EventArgs e)
+        {
+            base.OnSizeChanged(e);
+            if (!shapeAnim.Enabled) ApplyShape();
+        }
+
+        void Grow()
+        {
+            closing = false;
+            reveal = 0.15f;
+            ApplyShape();
+            shapeAnim.Start();
+        }
+
+        /// <summary>Folds back up into the menu bar, then hides.</summary>
+        void Shrink()
+        {
+            if (closing || !Visible) return;
+            closing = true;
+            shapeAnim.Start();
+        }
+
+        void AnimateShape()
+        {
+            reveal += (closing ? -15f / 140 : 15f / 190);
+            if (closing && reveal <= 0.05f) { shapeAnim.Stop(); reveal = 1; closing = false; CloseFlyout(); return; }
+            if (!closing && reveal >= 1) { reveal = 1; shapeAnim.Stop(); }
+            ApplyShape();
+        }
+
+        /// <summary>The notch outline (open at the top, where it meets the menu bar).</summary>
+        GraphicsPath Outline(float w, float h, float inset)
+        {
+            float r = Radius - inset;
+            var p = new GraphicsPath();
+            p.AddLine(inset, 0, inset, h - r - inset);
+            p.AddArc(inset, h - 2 * r - inset, 2 * r, 2 * r, 180, -90);
+            p.AddLine(inset + r, h - inset, w - inset - r, h - inset);
+            p.AddArc(w - inset - 2 * r, h - 2 * r - inset, 2 * r, 2 * r, 90, -90);
+            p.AddLine(w - inset, h - r - inset, w - inset, 0);
+            return p;
+        }
+
+        /// <summary>Dark frosted glass: the blurred desktop shows through, with a glossy sheen on top and a fine light edge.</summary>
+        void Glass(Graphics g, float W, float H)
+        {
+            var all = new RectangleF(0, 0, W, H);
+            bool glass = Acrylic;
+            if (tab == "media" && Media.Has) view.Backdrop(g, all, glass ? 170 : 255);
+            else
+                using (var br = new LinearGradientBrush(all, Color.FromArgb(glass ? 150 : 252, 26, 26, 32), Color.FromArgb(glass ? 205 : 252, 8, 8, 11), 90f))
+                    g.FillRectangle(br, all);
+            // gloss: a soft sheen across the top half, and a faint lift along the bottom edge
+            // (gradients overshoot the area they fill: GDI+ wraps a gradient at its edge, which drew a bright line there)
+            using (var sheen = new LinearGradientBrush(new RectangleF(0, -2, W, H * 0.55f + 8), Color.FromArgb(30, 255, 255, 255), Color.FromArgb(0, 255, 255, 255), 90f))
+                g.FillRectangle(sheen, 0, 0, W, H * 0.55f);
+            using (var lift = new LinearGradientBrush(new RectangleF(0, H - 40 * S - 4, W, 40 * S + 8), Color.FromArgb(0, 255, 255, 255), Color.FromArgb(12, 255, 255, 255), 90f))
+                g.FillRectangle(lift, 0, H - 40 * S, W, 40 * S);
+            // edge light around the sides and the round bottom, brightest at the bottom like light catching glass
+            using (var edge = Outline(W, H, 0.75f * S))
+            using (var eb = new LinearGradientBrush(all, Color.FromArgb(26, 255, 255, 255), Color.FromArgb(70, 255, 255, 255), 90f))
+            using (var pen = new Pen(eb, 1.2f * S))
+                g.DrawPath(pen, edge);
+            // where it meets the menu bar: a hairline shadow so the notch reads as hanging from it
+            using (var seam = new LinearGradientBrush(new RectangleF(0, 0, W, 6 * S), Color.FromArgb(70, 0, 0, 0), Color.FromArgb(0, 0, 0, 0), 90f))
+                g.FillRectangle(seam, 0, 0, W, 6 * S);
+        }
 
         protected override void Build(UI ui)
         {
             float W = ui.W, H = FixedLogicalHeight * S;
-            var all = new RectangleF(0, 0, W, H);
-            if (tab == "media" && Media.Has) view.Backdrop(ui.G, all);
-            else
-                using (var br = new LinearGradientBrush(all, Color.FromArgb(250, 30, 30, 34), Color.FromArgb(250, 12, 12, 14), 90f))
-                    ui.G.FillRectangle(br, all);
+            Glass(ui.G, W, H);
 
             var c = new RectangleF(Pad * S, 18 * S, W - 2 * Pad * S, H - 18 * S - TabBarH * S);
             using (var f = new Fonts2(S))
@@ -204,14 +308,18 @@ namespace Harbor
                 widths[i] = tabs[i] == tab ? icon + ui.G.MeasureString(tabNames[i], f.Bold).Width + 6 * S : icon;
                 total += widths[i] + (i > 0 ? gap : 0);
             }
-            float x = r.X + (r.Width - total) / 2, y = r.Y + (r.Height - h) / 2 - 4 * S;
+            float x = r.X + (r.Width - total) / 2, y = r.Y + (r.Height - h) / 2 - 2 * S;
+            // the tabs sit in their own frosted capsule
+            var dock = new RectangleF(x - 5 * S, y - 5 * S, total + 10 * S, h + 10 * S);
+            GlassShape(ui, dock, dock.Height / 2, 7, 16);
             using (var gf = new Font(Fonts.Icons, 14f * S, GraphicsUnit.Pixel))
                 for (int i = 0; i < tabs.Length; i++)
                 {
                     var pr = new RectangleF(x, y, widths[i], h);
                     bool sel = tabs[i] == tab;
                     string id = "tab:" + tabs[i];
-                    if (sel || Hover == id) ui.Fill(pr, Color.FromArgb(sel ? 46 : 24, 255, 255, 255), h / 2);
+                    if (sel) GlassShape(ui, pr, h / 2, 30, 30);
+                    else if (Hover == id) ui.Fill(pr, Color.FromArgb(22, 255, 255, 255), h / 2);
                     var ir = new RectangleF(pr.X, pr.Y, icon, h);
                     if (tabGlyphs[i] != null) ui.Glyph(tabGlyphs[i], ir, gf, sel ? f.White : f.Dim);
                     else WeatherIcons.Draw(ui.G, RectangleF.Inflate(ir, -8 * S, -6 * S), Weather.Now != null ? Weather.Now.Code : 2, Weather.Now == null || Weather.Now.Day);
@@ -228,7 +336,9 @@ namespace Harbor
             return t.TotalHours >= 1 ? (int)t.TotalHours + "h " + t.Minutes + "m" : (int)t.TotalMinutes + "m";
         }
 
-        void Card(UI ui, RectangleF r) { ui.Fill(r, Color.FromArgb(18, 255, 255, 255), 14 * S); }
+        void Card(UI ui, RectangleF r) { GlassShape(ui, r, 16 * S, 14, 26); }
+
+        void GlassShape(UI ui, RectangleF r, float radius, int fill, int edge) { ui.Glass(r, radius, fill, edge); }
 
         // ------------------------------------------------------------------ media
 
@@ -492,7 +602,7 @@ namespace Harbor
             }
             float ay = c.Y + 36 * S;
             double top = list.Count > 0 ? list[0].Seconds : 1;
-            for (int k = 0; k < list.Count && k < 5; k++)
+            for (int k = 0; k < list.Count && k < 5 && ay + 26 * S <= c.Bottom; k++)
             {
                 var a = list[k];
                 var ic = IconFor(a.Icon);
@@ -548,116 +658,134 @@ namespace Harbor
             SetThreadExecutionState(keepAwake ? 0x80000003u : 0x80000000u);
         }
 
+        /// <summary>
+        /// Three calm widgets (Up next, Focus, Weather), each a caption and one big thing, over one slim strip
+        /// with your most-used apps and the quick toggles.
+        /// </summary>
         void DashboardTab(UI ui, RectangleF c, Fonts2 f)
         {
-            float gap = 12 * S, cw = (c.Width - 2 * gap) / 3, rh = (c.Height - gap) / 2;
-            var col1 = new RectangleF(c.X, c.Y, cw, c.Height);
-            var b2 = new RectangleF(c.X + cw + gap, c.Y, cw, rh);
-            var b3 = new RectangleF(b2.X, c.Y + rh + gap, cw, rh);
-            var b4 = new RectangleF(c.X + 2 * (cw + gap), c.Y, cw, rh);
-            var b5 = new RectangleF(b4.X, b3.Y, cw, rh);
-            foreach (var r in new[] { col1, b2, b3, b4, b5 }) Card(ui, r);
-            float ip = 14 * S;
+            float gap = 12 * S, cw = (c.Width - 2 * gap) / 3, stripH = 50 * S, topH = c.Height - stripH - gap;
+            var up = new RectangleF(c.X, c.Y, cw, topH);
+            var focus = new RectangleF(c.X + cw + gap, c.Y, cw, topH);
+            var wx = new RectangleF(c.X + 2 * (cw + gap), c.Y, cw, topH);
+            var strip = new RectangleF(c.X, c.Bottom - stripH, c.Width, stripH);
+            foreach (var r in new[] { up, focus, wx, strip }) GlassShape(ui, r, 18 * S, 9, 18);
+            float ip = 16 * S;
+            var now = DateTime.Now;
 
-            // reminders
+            // ---- up next (reminders)
+            Caption(ui, up, ip, "UP NEXT", f);
             var open = Reminders.Open();
-            ui.Text("Reminders", new RectangleF(col1.X + ip, col1.Y + 10 * S, cw - 2 * ip, 20 * S), f.Bold, f.White);
-            ui.Text(open.Count == 0 ? "" : open.Count.ToString(), new RectangleF(col1.X + ip, col1.Y + 10 * S, cw - 2 * ip, 20 * S), f.Small, f.Faint, 2);
-            float y = col1.Y + 38 * S;
-            if (open.Count == 0) ui.Text("All caught up", new RectangleF(col1.X + ip, y, cw - 2 * ip, 20 * S), f.Body, f.Faint);
-            for (int i = 0; i < open.Count && i < 4; i++)
+            if (open.Count == 0)
+            {
+                using (var gf = new Font(Fonts.Icons, 15f * S, GraphicsUnit.Pixel))
+                using (var gb = new SolidBrush(Color.FromArgb(255, 48, 209, 88)))
+                    ui.Glyph("", new RectangleF(up.X + ip - 2 * S, up.Y + 38 * S, 22 * S, 26 * S), gf, gb);
+                ui.Text("All caught up", new RectangleF(up.X + ip + 24 * S, up.Y + 38 * S, cw - 2 * ip - 24 * S, 26 * S), f.Title, f.White);
+            }
+            float y = up.Y + 36 * S;
+            for (int i = 0; i < open.Count && i < 3; i++)
             {
                 var it = open[i];
-                string due = Reminders.DueText(it);
-                if (y + (due != null ? 36 : 24) * S > col1.Bottom - 38 * S) break;
                 string id = "dr" + it.Id;
-                var tick = new RectangleF(col1.X + ip, y + 2 * S, 16 * S, 16 * S);
+                var tick = new RectangleF(up.X + ip, y + 3 * S, 15 * S, 15 * S);
                 TickCircle(ui, tick, false, Hover == id);
-                ui.AddHit(id, RectangleF.Inflate(tick, 4 * S, 4 * S), () => Reminders.Toggle(it), true);
-                ui.Text(it.Text, new RectangleF(tick.Right + 8 * S, y, cw - 2 * ip - 26 * S, 20 * S), f.Body, f.White);
+                ui.AddHit(id, RectangleF.Inflate(tick, 5 * S, 5 * S), () => Reminders.Toggle(it), true);
+                string due = Reminders.DueText(it);
+                float dw = due != null ? ui.G.MeasureString(due, f.Small).Width + 4 * S : 0;
+                ui.Text(it.Text, new RectangleF(tick.Right + 9 * S, y, cw - 2 * ip - 24 * S - dw, 21 * S), f.Body, f.White);
                 if (due != null)
                     using (var db = new SolidBrush(Reminders.Overdue(it) ? Color.FromArgb(255, 255, 105, 97) : NowPlayingView.Faint))
-                        ui.Text(due, new RectangleF(tick.Right + 8 * S, y + 18 * S, cw - 2 * ip - 26 * S, 16 * S), f.Small, db);
-                y += (due != null ? 38 : 26) * S;
+                        ui.Text(due, new RectangleF(up.X + ip, y, cw - 2 * ip, 21 * S), f.Small, db, 2);
+                y += 25 * S;
             }
-            var add = new RectangleF(col1.X + ip - 6 * S, col1.Bottom - 34 * S, 130 * S, 26 * S);
-            if (Hover == "dadd") ui.Fill(add, Color.FromArgb(24, 255, 255, 255), 13 * S);
-            ui.Text("+  New reminder", new RectangleF(add.X + 6 * S, add.Y, add.Width, add.Height), f.Small, f.Dim);
+            var add = new RectangleF(up.X + ip - 6 * S, up.Bottom - 30 * S, 110 * S, 22 * S);
+            if (Hover == "dadd") ui.Fill(add, Color.FromArgb(22, 255, 255, 255), 11 * S);
+            ui.Text("+  Add reminder", new RectangleF(add.X + 6 * S, add.Y, add.Width, add.Height), f.Small, Hover == "dadd" ? f.White : f.Faint);
             ui.AddHit("dadd", add, () => { SetTab("reminders", false); FocusField = "rem"; Activate(); N.SetForegroundWindow(Handle); }, true);
+            if (open.Count > 3) ui.Text("+" + (open.Count - 3) + " more", new RectangleF(up.X + ip, up.Bottom - 30 * S, cw - 2 * ip, 22 * S), f.Small, f.Faint, 2);
 
-            // most-used apps today (a launcher that fills itself)
-            ui.Text("Most used today", new RectangleF(b2.X + ip, b2.Y + 10 * S, cw - 2 * ip, 20 * S), f.Bold, f.White);
+            // ---- focus (Pomodoro + how much of the day is left)
+            Caption(ui, focus, ip, Pomodoro.Running ? Pomodoro.Name(Pomodoro.Current).ToUpperInvariant() : "FOCUS", f);
+            var rem = Pomodoro.Remaining;
+            ui.Text(((int)rem.TotalMinutes).ToString("00") + ":" + rem.Seconds.ToString("00"), new RectangleF(focus.X + ip, focus.Y + 30 * S, 120 * S, 36 * S), f.Big, f.White);
+            ui.Text(Pomodoro.Running ? "Focusing" : (Pomodoro.Progress > 0 ? "Paused" : "Ready"), new RectangleF(focus.X + ip, focus.Y + 64 * S, 120 * S, 16 * S), f.Small, f.Dim);
+            using (var big = new Font(Fonts.Icons, 13f * S, GraphicsUnit.Pixel))
+            using (var dark = new SolidBrush(Color.FromArgb(235, 18, 18, 22)))
+                RoundBtn(ui, "dpomo", new PointF(focus.Right - ip - 17 * S, focus.Y + 54 * S), 17 * S, Pomodoro.Running ? "" : "", Pomodoro.Toggle, big, dark, true);
+            int start = Math.Max(0, Math.Min(23, Look.Int("DayStart"))), end = Math.Max(start + 1, Math.Min(24, Look.Int("DayEnd")));
+            float frac = (float)Math.Max(0, Math.Min(1, (now - now.Date.AddHours(start)).TotalHours / (end - start)));
+            var bar = new RectangleF(focus.X + ip, focus.Bottom - 18 * S, cw - 2 * ip, 4 * S);
+            ui.Fill(bar, Color.FromArgb(34, 255, 255, 255), 2 * S);
+            ui.Fill(new RectangleF(bar.X, bar.Y, Math.Max(4 * S, bar.Width * frac), bar.Height), Ember, 2 * S);
+            string dayText = frac >= 1 ? "Day's done" : frac <= 0 ? "Day starts at " + start + ":00" : "Day " + (int)Math.Round(frac * 100) + "%";
+            ui.Text(dayText, new RectangleF(focus.X + ip, bar.Y - 19 * S, cw - 2 * ip, 16 * S), f.Small, f.Faint);
+            if (frac > 0 && frac < 1) ui.Text("until " + end + ":00", new RectangleF(focus.X + ip, bar.Y - 19 * S, cw - 2 * ip, 16 * S), f.Small, f.Faint, 2);
+
+            // ---- weather (or Claude, until a city is set)
+            var w = Weather.HasCity ? Weather.Now : null;
+            if (Weather.HasCity) Weather.Ensure();
+            if (w != null)
+            {
+                Caption(ui, wx, ip, Weather.Place.Split(',')[0].ToUpperInvariant(), f);
+                WeatherIcons.Draw(ui.G, new RectangleF(wx.X + ip - 4 * S, wx.Y + 32 * S, 40 * S, 40 * S), w.Code, w.Day);
+                ui.Text(Math.Round(w.Temp) + "°", new RectangleF(wx.X + ip + 42 * S, wx.Y + 30 * S, 100 * S, 36 * S), f.Big, f.White);
+                ui.Text(Weather.Describe(w.Code), new RectangleF(wx.X + ip, wx.Y + 76 * S, cw - 2 * ip, 18 * S), f.Body, f.Dim);
+                ui.Text("H " + Math.Round(w.High) + "°   L " + Math.Round(w.Low) + "°", new RectangleF(wx.X + ip, wx.Bottom - 26 * S, cw - 2 * ip, 16 * S), f.Small, f.Faint);
+            }
+            else
+            {
+                Caption(ui, wx, ip, "AI CODING", f);
+                int active = 0;
+                foreach (var s in ClaudeBridge.Sessions.Values) if ((s.Status == "Running" || s.Status == "Waiting") && (now - s.Updated).TotalMinutes < 30) active++;
+                bool asking = ClaudeBridge.Pending.Count > 0;
+                ui.Text(asking ? "Needs you" : active > 0 ? active + " active" : "All quiet", new RectangleF(wx.X + ip, wx.Y + 32 * S, cw - 2 * ip, 34 * S), f.Big, f.White);
+                ui.Text(asking ? "Claude is waiting for an answer" : active > 0 ? "Claude is working" : "No sessions running", new RectangleF(wx.X + ip, wx.Y + 70 * S, cw - 2 * ip, 18 * S), f.Small, f.Dim);
+                if (!Weather.HasCity) ui.Text("Set a city in Harbor for weather", new RectangleF(wx.X + ip, wx.Bottom - 26 * S, cw - 2 * ip, 16 * S), f.Small, f.Faint);
+            }
+
+            // ---- one slim strip: most-used apps on the left, quick toggles on the right
             var apps = new List<string>();
-            foreach (var a in ScreenTime.Today()) if (a.Icon != null && apps.Count < 5) apps.Add(a.Icon);
-            foreach (var p in Settings.Pinned) if (apps.Count < 5 && !apps.Contains(p)) apps.Add(p);
-            float isz = 30 * S, slot = (cw - 2 * ip) / 5;
+            foreach (var a in ScreenTime.Today()) if (a.Icon != null && apps.Count < 6) apps.Add(a.Icon);
+            foreach (var p in Settings.Pinned) if (apps.Count < 6 && !apps.Contains(p)) apps.Add(p);
+            float isz = 26 * S, ax = strip.X + ip, ay = strip.Y + (stripH - isz) / 2;
             for (int i = 0; i < apps.Count; i++)
             {
-                var r = new RectangleF(b2.X + ip + i * slot + (slot - isz) / 2, b2.Y + 44 * S, isz, isz);
+                var r = new RectangleF(ax + i * (isz + 12 * S), ay, isz, isz);
                 string id = "la" + i, path = apps[i];
-                if (Hover == id) ui.Fill(RectangleF.Inflate(r, 5 * S, 5 * S), Color.FromArgb(30, 255, 255, 255), 10 * S);
-                var ic = IconFor(path, 30);
+                if (Hover == id) ui.Fill(RectangleF.Inflate(r, 5 * S, 5 * S), Color.FromArgb(28, 255, 255, 255), 9 * S);
+                var ic = IconFor(path, 26);
                 if (ic != null) ui.G.DrawImage(ic, r);
                 ui.AddHit(id, RectangleF.Inflate(r, 5 * S, 5 * S), () => Launcher.Open(path));
             }
 
-            // quick toggles
-            ui.Text("Quick toggles", new RectangleF(b3.X + ip, b3.Y + 10 * S, cw - 2 * ip, 20 * S), f.Bold, f.White);
             var ids = new List<string>(); var glyphs = new List<string>(); var ons = new List<bool>(); var acts = new List<Action>();
-            ids.Add("qdark"); glyphs.Add(""); ons.Add(Theme.Dark); acts.Add(ControlCenter.ToggleDarkMode);
+            ids.Add("qdark"); glyphs.Add(""); ons.Add(Theme.UserDark); acts.Add(ControlCenter.ToggleDarkMode);
             if (Radios.HasWifi) { ids.Add("qwifi"); glyphs.Add(""); ons.Add(Radios.WifiOn); acts.Add(() => Radios.SetWifi(!Radios.WifiOn)); }
             if (Radios.HasBt) { ids.Add("qbt"); glyphs.Add(""); ons.Add(Radios.BtOn); acts.Add(() => Radios.SetBluetooth(!Radios.BtOn)); }
             ids.Add("qawake"); glyphs.Add(""); ons.Add(keepAwake); acts.Add(ToggleKeepAwake);
             ids.Add("qshot"); glyphs.Add(""); ons.Add(false); acts.Add(() => { CloseFlyout(); Launcher.Run("ms-screenclip:"); });
             ids.Add("qlock"); glyphs.Add(""); ons.Add(false); acts.Add(() => N.LockWorkStation());
-            float tsz = 32 * S, tslot = (cw - 2 * ip) / 6;
-            using (var gf = new Font(Fonts.Icons, 13f * S, GraphicsUnit.Pixel))
+            float tsz = 30 * S, tgap = 8 * S, tx = strip.Right - ip - ids.Count * tsz - (ids.Count - 1) * tgap;
+            using (var pen = new Pen(Color.FromArgb(26, 255, 255, 255), 1)) ui.G.DrawLine(pen, tx - 14 * S, strip.Y + 12 * S, tx - 14 * S, strip.Bottom - 12 * S);
+            using (var gf = new Font(Fonts.Icons, 12f * S, GraphicsUnit.Pixel))
             using (var dark = new SolidBrush(Color.FromArgb(235, 18, 18, 22)))
                 for (int i = 0; i < ids.Count; i++)
                 {
-                    var r = new RectangleF(b3.X + ip + i * tslot + (tslot - tsz) / 2, b3.Y + 44 * S, tsz, tsz);
-                    using (var bg = new SolidBrush(ons[i] ? Color.FromArgb(Hover == ids[i] ? 255 : 235, 255, 255, 255) : Color.FromArgb(Hover == ids[i] ? 60 : 34, 255, 255, 255)))
+                    var r = new RectangleF(tx + i * (tsz + tgap), strip.Y + (stripH - tsz) / 2, tsz, tsz);
+                    using (var bg = new SolidBrush(ons[i] ? Color.FromArgb(Hover == ids[i] ? 255 : 232, 255, 255, 255) : Color.FromArgb(Hover == ids[i] ? 54 : 26, 255, 255, 255)))
                         ui.G.FillEllipse(bg, r);
-                    ui.Glyph(glyphs[i], r, gf, ons[i] ? (Brush)dark : f.White);
+                    ui.Glyph(glyphs[i], r, gf, ons[i] ? (Brush)dark : f.Dim);
                     var act = acts[i];
                     ui.AddHit(ids[i], r, () => act(), true);
                 }
+        }
 
-            // pomodoro + day progress
-            var rem = Pomodoro.Remaining;
-            ui.Text("Pomodoro", new RectangleF(b4.X + ip, b4.Y + 10 * S, cw - 2 * ip, 20 * S), f.Bold, f.White);
-            ui.Text(((int)rem.TotalMinutes).ToString("00") + ":" + rem.Seconds.ToString("00"), new RectangleF(b4.X + ip, b4.Y + 32 * S, 120 * S, 32 * S), f.Big, f.White);
-            ui.Text(Pomodoro.Running ? Pomodoro.Name(Pomodoro.Current) : (Pomodoro.Progress > 0 ? "Paused" : Pomodoro.Name(Pomodoro.Current)), new RectangleF(b4.X + ip, b4.Y + 64 * S, 120 * S, 16 * S), f.Small, f.Dim);
-            using (var big = new Font(Fonts.Icons, 13f * S, GraphicsUnit.Pixel))
-            using (var dark = new SolidBrush(Color.FromArgb(235, 18, 18, 22)))
-                RoundBtn(ui, "dpomo", new PointF(b4.Right - ip - 17 * S, b4.Y + 50 * S), 17 * S, Pomodoro.Running ? "" : "", Pomodoro.Toggle, big, dark, true);
-            int start = Math.Max(0, Math.Min(23, Look.Int("DayStart"))), end = Math.Max(start + 1, Math.Min(24, Look.Int("DayEnd")));
-            var now = DateTime.Now;
-            float frac = (float)Math.Max(0, Math.Min(1, (now - now.Date.AddHours(start)).TotalHours / (end - start)));
-            var bar = new RectangleF(b4.X + ip, b4.Bottom - 12 * S, cw - 2 * ip, 4 * S);
-            ui.Fill(bar, Color.FromArgb(36, 255, 255, 255), 2 * S);
-            ui.Fill(new RectangleF(bar.X, bar.Y, Math.Max(4 * S, bar.Width * frac), bar.Height), Ember, 2 * S);
-            ui.Text("Day " + (int)Math.Round(frac * 100) + "%", new RectangleF(b4.X + ip, bar.Y - 18 * S, cw - 2 * ip, 16 * S), f.Small, f.Faint, 2);
-
-            // weather (or Claude when there's no city yet)
-            var w = Weather.HasCity ? Weather.Now : null;
-            if (Weather.HasCity) Weather.Ensure();
-            if (w != null)
-            {
-                WeatherIcons.Draw(ui.G, new RectangleF(b5.X + ip - 4 * S, b5.Y + 12 * S, 44 * S, 44 * S), w.Code, w.Day);
-                ui.Text(Math.Round(w.Temp) + "°", new RectangleF(b5.X + ip + 46 * S, b5.Y + 10 * S, 100 * S, 36 * S), f.Big, f.White);
-                ui.Text(Weather.Describe(w.Code), new RectangleF(b5.X + ip + 46 * S, b5.Y + 44 * S, cw - 2 * ip - 46 * S, 16 * S), f.Small, f.Dim);
-                ui.Text(Weather.Place + "  ·  H " + Math.Round(w.High) + "° L " + Math.Round(w.Low) + "°", new RectangleF(b5.X + ip, b5.Bottom - 24 * S, cw - 2 * ip, 16 * S), f.Small, f.Faint);
-            }
-            else
-            {
-                int active = 0;
-                foreach (var s in ClaudeBridge.Sessions.Values) if ((s.Status == "Running" || s.Status == "Waiting") && (now - s.Updated).TotalMinutes < 30) active++;
-                ui.Text("AI Coding", new RectangleF(b5.X + ip, b5.Y + 10 * S, cw - 2 * ip, 20 * S), f.Bold, f.White);
-                ui.Text(ClaudeBridge.Pending.Count > 0 ? "Claude is waiting for you" : active > 0 ? active + " session" + (active == 1 ? "" : "s") + " active" : "No active sessions",
-                    new RectangleF(b5.X + ip, b5.Y + 36 * S, cw - 2 * ip, 20 * S), f.Body, ClaudeBridge.Pending.Count > 0 ? f.White : f.Dim);
-                if (!Weather.HasCity) ui.Text("Add your city in Harbor settings for weather", new RectangleF(b5.X + ip, b5.Bottom - 24 * S, cw - 2 * ip, 16 * S), f.Small, f.Faint);
-            }
+        /// <summary>The small, faint caption at the top of a widget.</summary>
+        void Caption(UI ui, RectangleF card, float ip, string text, Fonts2 f)
+        {
+            using (var cf = new Font(Fonts.UiBold, 10.5f * S, GraphicsUnit.Pixel))
+                ui.Text(text, new RectangleF(card.X + ip, card.Y + 12 * S, card.Width - 2 * ip, 16 * S), cf, f.Faint);
         }
 
         Bitmap IconFor(string path, int logical)
@@ -769,8 +897,96 @@ namespace Harbor
 
         static readonly Color Running = Color.FromArgb(255, 48, 209, 88), Waiting = Color.FromArgb(255, 255, 159, 10);
 
+        // multi-select answers being ticked for the current question
+        readonly HashSet<string> ticked = new HashSet<string>();
+        string tickedFor;
+
+        /// <summary>Claude is asking a multiple-choice question: show it, and send the pick straight back.</summary>
+        void QuestionCard(UI ui, RectangleF c, Fonts2 f, ClaudeBridge.Request r)
+        {
+            var q = ClaudeBridge.NextQuestion(r);
+            if (q == null) return;
+            if (tickedFor != q.Text) { ticked.Clear(); tickedFor = q.Text; }
+            var card = new RectangleF(c.X - 6 * S, c.Y - 8 * S, c.Width + 12 * S, c.Bottom - c.Y + 6 * S);
+            GlassShape(ui, card, 18 * S, 16, 34);
+            float ix = card.X + 14 * S, iw = card.Width - 28 * S, y = card.Y + 10 * S;
+
+            // header chip, who's asking, and how long it's been waiting
+            float hx = ix;
+            if (!string.IsNullOrEmpty(q.Header))
+            {
+                float hw = PillWidth(ui, q.Header, f.Small);
+                Pill(ui, new RectangleF(hx, y, hw, 20 * S), q.Header, Color.FromArgb(70, 255, 159, 10), f.Small, f.White);
+                hx += hw + 8 * S;
+            }
+            ui.Text("Claude is asking  ·  " + r.Project, new RectangleF(hx, y, iw - (hx - ix) - 120 * S, 20 * S), f.Small, f.Dim);
+            int idx = r.Questions.IndexOf(q);
+            ui.Text((r.Questions.Count > 1 ? (idx + 1) + " of " + r.Questions.Count + "  ·  " : "") + "waiting " + Span(DateTime.Now - r.At), new RectangleF(ix, y, iw, 20 * S), f.Small, f.Faint, 2);
+            y += 26 * S;
+            ui.Text(q.Text, new RectangleF(ix, y, iw, 22 * S), f.Title, f.White);
+            y += 30 * S;
+
+            // the options: a 2-column grid of glass tiles (label + description)
+            int n = q.Options.Count, cols = n <= 1 ? 1 : 2, rows = (n + cols - 1) / cols;
+            float gap = 8 * S, bottomRow = 30 * S;
+            float tileH = Math.Min(46 * S, (card.Bottom - 12 * S - bottomRow - 8 * S - y - (rows - 1) * gap) / Math.Max(1, rows));
+            float tileW = (iw - (cols - 1) * gap) / cols;
+            for (int i = 0; i < n; i++)
+            {
+                var o = q.Options[i];
+                var t = new RectangleF(ix + (i % cols) * (tileW + gap), y + (i / cols) * (tileH + gap), tileW, tileH);
+                string id = "qo" + i;
+                bool on = q.Multi && ticked.Contains(o[0]);
+                GlassShape(ui, t, 12 * S, Hover == id || on ? 34 : 14, on ? 90 : (Hover == id ? 60 : 28));
+                float tx = t.X + 12 * S;
+                if (q.Multi)
+                {
+                    var box = new RectangleF(tx, t.Y + (tileH - 16 * S) / 2, 16 * S, 16 * S);
+                    TickCircle(ui, box, on, Hover == id);
+                    tx = box.Right + 10 * S;
+                }
+                bool oneLine = string.IsNullOrEmpty(o[1]) || tileH < 38 * S;
+                ui.Text(o[0], new RectangleF(tx, oneLine ? t.Y : t.Y + 5 * S, t.Right - tx - 10 * S, oneLine ? tileH : 19 * S), f.Bold, f.White);
+                if (!oneLine) ui.Text(o[1], new RectangleF(tx, t.Y + 23 * S, t.Right - tx - 10 * S, 17 * S), f.Small, f.Dim);
+                string label = o[0];
+                ui.AddHit(id, t, () =>
+                {
+                    if (!q.Multi) { ClaudeBridge.Pick(r, q, label); return; }
+                    if (!ticked.Remove(label)) ticked.Add(label);
+                }, true);
+            }
+
+            // bottom row: leave it to the editor (e.g. to type your own answer), or send the ticked ones
+            float by = card.Bottom - 12 * S - bottomRow;
+            var editor = new RectangleF(ix, by, 150 * S, bottomRow);
+            ui.Fill(editor, Color.FromArgb(Hover == "qEditor" ? 46 : 26, 255, 255, 255), bottomRow / 2);
+            ui.Text("Answer in editor", editor, f.Small, Hover == "qEditor" ? f.White : f.Dim, 1);
+            ui.AddHit("qEditor", editor, () => ClaudeBridge.Answer(r, null), true);
+            if (q.Multi)
+            {
+                var send = new RectangleF(card.Right - 14 * S - 110 * S, by, 110 * S, bottomRow);
+                bool can = ticked.Count > 0;
+                ui.Fill(send, can ? Color.FromArgb(Hover == "qSend" ? 255 : 238, 255, 255, 255) : Color.FromArgb(36, 255, 255, 255), bottomRow / 2);
+                using (var dark = new SolidBrush(Color.FromArgb(235, 18, 18, 22)))
+                    ui.Text(can ? "Send (" + ticked.Count + ")" : "Pick one or more", send, f.Bold, can ? (Brush)dark : f.Faint, 1);
+                if (can)
+                {
+                    var labels = new List<string>();
+                    foreach (var o in q.Options) if (ticked.Contains(o[0])) labels.Add(o[0]); // in Claude's order
+                    ui.AddHit("qSend", send, () => ClaudeBridge.Pick(r, q, string.Join(", ", labels.ToArray())), true);
+                }
+            }
+            else if (r.Questions.Count > 1 || r.Picked.Count > 0)
+                ui.Text("Pick an answer to continue", new RectangleF(ix, by, iw, bottomRow), f.Small, f.Faint, 2);
+        }
+
         void AiTab(UI ui, RectangleF c, Fonts2 f)
         {
+            if (ClaudeBridge.Pending.Count > 0 && ClaudeBridge.Pending[0].Questions != null)
+            {
+                QuestionCard(ui, c, f, ClaudeBridge.Pending[0]);
+                return;
+            }
             var now = DateTime.Now;
             int active = 0;
             foreach (var s in ClaudeBridge.Sessions.Values) if ((s.Status == "Running" || s.Status == "Waiting") && (now - s.Updated).TotalMinutes < 30) active++;

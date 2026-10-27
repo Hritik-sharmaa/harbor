@@ -140,6 +140,7 @@ namespace Harbor
             ScreenTime.Init();
             Reminders.Init();
             ClaudeBridge.Start();
+            ClaudeBridge.EnsureHooks(Application.ExecutablePath); // e.g. a new editor or account profile since last time
             ClaudeBridge.Asked += Island.Attention;
             WatchForeground();
             foreach (var d in Displays) d.Bar.RenderBar();
@@ -697,6 +698,7 @@ namespace Harbor
             if (hi >= 0 && hi + 1 < args.Length) int.TryParse(args[hi + 1], out hover);
             Directory.CreateDirectory(dir);
             bool demo = Array.IndexOf(args, "--demo") >= 0;
+            ClaudeBridge.DemoQuestion = Array.IndexOf(args, "--question") >= 0;
             if (demo) UseDemoData();
             var p = PrimaryDisplay;
             var dock = p.Dock.Snapshot(hover);
@@ -804,6 +806,7 @@ namespace Harbor
             Media.SourceApp = "Spotify.exe";
             Media.Playing = true;
             Media.DemoTimeline(TimeSpan.FromSeconds(72), TimeSpan.FromSeconds(243));
+            BtBattery.Demo = true;
             BtBattery.ConnectedName = "AirPods Pro";
             BtBattery.ConnectedLevel = 85;
             NotificationCenter.Demo = true;

@@ -69,19 +69,7 @@ namespace Harbor
         }
 
         /// <summary>Frosted glass module: translucent fill, bright rim at the top, hairline below.</summary>
-        void Module(UI ui, RectangleF r, bool hot, float radius)
-        {
-            Color fill = Theme.Dark ? Color.FromArgb(hot ? 44 : 30, 255, 255, 255) : Color.FromArgb(hot ? 235 : 190, 255, 255, 255);
-            using (var p = Gfx.RoundRect(r, radius))
-            {
-                using (var br = new SolidBrush(fill)) ui.G.FillPath(br, p);
-                using (var lg = new LinearGradientBrush(new RectangleF(r.X, r.Y - 1, r.Width, r.Height + 2),
-                    Color.FromArgb(Theme.Dark ? 60 : 255, 255, 255, 255), Color.FromArgb(Theme.Dark ? 12 : 120, 255, 255, 255), 90f))
-                using (var pen = new Pen(lg, 1f))
-                    ui.G.DrawPath(pen, p);
-                if (!Theme.Dark) using (var pen = new Pen(Color.FromArgb(14, 0, 0, 0), 1f)) ui.G.DrawPath(pen, p);
-            }
-        }
+        void Module(UI ui, RectangleF r, bool hot, float radius) { ui.Glass(r, radius, hot ? 24 : 13, hot ? 44 : 28); }
 
         void RoundModule(UI ui, string id, RectangleF cell, string glyph, Action act, bool on = false)
         {
@@ -185,7 +173,7 @@ namespace Harbor
             Circle(ui, "focusc", new PointF(focus.X + 30 * S, focus.Y + focus.Height / 2), 16 * S, false, "", null);
             ui.Text("Focus", new RectangleF(focus.X + 56 * S, focus.Y + focus.Height / 2 - 16 * S, focus.Width - 62 * S, 17 * S), ui.Bold, ui.TextBrush);
             ui.Text("Notifications", new RectangleF(focus.X + 56 * S, focus.Y + focus.Height / 2 + 1 * S, focus.Width - 62 * S, 15 * S), ui.Small, ui.DimBrush);
-            RoundModule(ui, "dark", CellRect(y, 2, 1, Cell), "\uE793", ToggleDarkMode, Theme.Dark);
+            RoundModule(ui, "dark", CellRect(y, 2, 1, Cell), "\uE793", ToggleDarkMode, Theme.UserDark);
             RoundModule(ui, "cast", CellRect(y, 3, 1, Cell), "", () => N.SendWinKey((byte)'K'));
             y += Cell * S + Gap * S;
 
@@ -256,7 +244,7 @@ namespace Harbor
         /// <summary>Switches Windows (apps + system) between light and dark, like the macOS Dark Mode button.</summary>
         internal static void ToggleDarkMode()
         {
-            bool toDark = !Theme.Dark;
+            bool toDark = !Theme.UserDark;
             try
             {
                 using (var k = Microsoft.Win32.Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize", true))

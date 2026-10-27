@@ -152,11 +152,7 @@ namespace Harbor
             return t.LocalDateTime.ToString("d MMM", CultureInfo.CurrentCulture);
         }
 
-        void Card(UI ui, RectangleF r, bool hot)
-        {
-            ui.Fill(r, hot ? Theme.TileHover : Theme.Tile, 14 * S);
-            using (var pen = new Pen(Theme.TileBorder, 1)) using (var p = Gfx.RoundRect(r, 14 * S)) ui.G.DrawPath(pen, p);
-        }
+        void Card(UI ui, RectangleF r, bool hot) { ui.Glass(r, 16 * S, hot ? 22 : 12, hot ? 42 : 26); }
 
         protected override void Build(UI ui)
         {

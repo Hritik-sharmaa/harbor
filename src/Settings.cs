@@ -216,8 +216,15 @@ namespace Harbor
                 }
                 catch { }
             }
+            UserDark = Dark;
             N.SetMenuTheme(Dark);
         }
+
+        /// <summary>
+        /// Your real light/dark choice. Panels always draw dark glass (Dark is forced on while they render),
+        /// so anything that shows the setting itself - the Dark Mode toggles - reads this instead.
+        /// </summary>
+        public static bool UserDark = true;
 
         public static Color Text { get { return Dark ? Color.FromArgb(242, 255, 255, 255) : Color.FromArgb(230, 0, 0, 0); } }
         public static Color TextDim { get { return Dark ? Color.FromArgb(150, 255, 255, 255) : Color.FromArgb(120, 0, 0, 0); } }

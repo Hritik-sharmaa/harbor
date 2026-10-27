@@ -30,8 +30,7 @@ namespace Harbor
         static DateTime lastScan;
         public static event Action Changed;
 
-        public static bool Available { get { return Directory.Exists(Root); } }
-        static string Root { get { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".claude", "projects"); } }
+        public static bool Available { get { return ClaudeBridge.ConfigDirs().Count > 0; } }
 
         /// <summary>The newest sessions (as of the last scan). Starts a background refresh if the last one is a few seconds old.</summary>
         public static List<Entry> Recent()
@@ -64,10 +63,15 @@ namespace Harbor
                 try
                 {
                     var files = new List<FileInfo>();
-                    if (Directory.Exists(Root))
-                        foreach (var dir in new DirectoryInfo(Root).GetDirectories())
+                    // every Claude Code folder: .claude, .claude-vscode, .claude-antigravity...
+                    foreach (var cfg in ClaudeBridge.ConfigDirs())
+                    {
+                        string root = Path.Combine(cfg, "projects");
+                        if (!Directory.Exists(root)) continue;
+                        foreach (var dir in new DirectoryInfo(root).GetDirectories())
                             foreach (var f in dir.GetFiles("*.jsonl")) // top level only: subagent transcripts live in subfolders
                                 if ((DateTime.Now - f.LastWriteTime).TotalDays < 3) files.Add(f);
+                    }
                     files.Sort((a, b) => b.LastWriteTime.CompareTo(a.LastWriteTime));
                     for (int i = 0; i < files.Count && i < 8; i++)
                     {

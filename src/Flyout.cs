@@ -58,7 +58,8 @@ namespace Harbor
                 cp.Style = N.WS_POPUP | (WindowMode ? 0x00020000 /*WS_MINIMIZEBOX*/ : 0);
                 cp.ExStyle |= WindowMode ? N.WS_EX_APPWINDOW : (N.WS_EX_TOOLWINDOW | N.WS_EX_TOPMOST);
                 if (NoActivate) cp.ExStyle |= N.WS_EX_NOACTIVATE;
-                cp.ClassStyle |= 0x20000; // CS_DROPSHADOW
+                // the classic square shadow would poke out past the glass panels' round corners
+                if (WindowMode) cp.ClassStyle |= 0x20000; // CS_DROPSHADOW
                 return cp;
             }
         }
@@ -66,11 +67,56 @@ namespace Harbor
         protected override void OnHandleCreated(EventArgs e)
         {
             base.OnHandleCreated(e);
-            N.RoundCorners(Handle);
+            if (WindowMode) { N.RoundCorners(Handle); return; }
+            int none = 1; // DWMWCP_DONOTROUND: glass panels cut their own, rounder corners (ApplyShape)
+            try { N.DwmSetWindowAttribute(Handle, 33, ref none, 4); } catch { }
+        }
+
+        // ------------------------------------------------------------------ dark glass (every panel but the settings window)
+
+        protected const float GlassRadius = 16;
+        int glassH; // the height the glass background was last painted for
+
+        /// <summary>The island paints its own glass and notch shape.</summary>
+        protected virtual bool OwnGlass { get { return false; } }
+
+        /// <summary>Clips the window to its shape: a rounded rectangle (the island overrides this with its notch).</summary>
+        protected virtual void ApplyShape()
+        {
+            if (WindowMode || !IsHandleCreated) return;
+            int r = (int)Math.Round(GlassRadius * S);
+            N.SetWindowRgn(Handle, N.CreateRoundRectRgn(0, 0, W + 1, H + 1, r * 2, r * 2), true);
+        }
+
+        /// <summary>Dark frosted glass: the blurred desktop shows through, with a soft sheen across the top.</summary>
+        void PaintGlass(Graphics g, float w, float h)
+        {
+            var all = new RectangleF(0, 0, w, h);
+            using (var br = new LinearGradientBrush(new RectangleF(0, -2, w, h + 4), Color.FromArgb(acrylic ? 150 : 252, 28, 28, 34), Color.FromArgb(acrylic ? 205 : 252, 10, 10, 13), 90f))
+                g.FillRectangle(br, all);
+            // gradients overshoot the area they fill: GDI+ wraps them at the edge, which drew a bright line there
+            using (var sheen = new LinearGradientBrush(new RectangleF(0, -2, w, Math.Min(h, 220 * S) * 0.5f + 8), Color.FromArgb(28, 255, 255, 255), Color.FromArgb(0, 255, 255, 255), 90f))
+                g.FillRectangle(sheen, 0, 0, w, Math.Min(h, 220 * S) * 0.5f);
+        }
+
+        /// <summary>The light rim around the panel's edge, brightest at the top where the light catches it.</summary>
+        void PaintRim(Graphics g, float w, float h)
+        {
+            float r = GlassRadius * S, inset = 0.75f * S;
+            using (var p = Gfx.RoundRect(new RectangleF(inset, inset, w - 2 * inset, h - 2 * inset), r - inset))
+            using (var b = new LinearGradientBrush(new RectangleF(0, -2, w, h + 4), Color.FromArgb(60, 255, 255, 255), Color.FromArgb(22, 255, 255, 255), 90f))
+            using (var pen = new Pen(b, 1.1f * S))
+                g.DrawPath(pen, p);
         }
 
         /// <summary>Opens and takes clicks without taking keyboard focus from the app you're typing in (hover panels).</summary>
         protected bool NoActivate;
+
+        /// <summary>Space between the menu bar and the panel (0 = attached, like a notch).</summary>
+        protected virtual float GapBelowBar { get { return 6; } }
+
+        /// <summary>True when the frosted-glass blur is on (transparent pixels show the blurred desktop).</summary>
+        protected bool Acrylic { get { return acrylic; } }
         protected override bool ShowWithoutActivation { get { return NoActivate; } }
 
         protected override void WndProc(ref Message m)
@@ -125,7 +171,7 @@ namespace Harbor
             scroll = 0;
             Hover = Pressed = Dragging = null;
             var h = Handle;
-            acrylic = !WindowMode && Settings.Blur && N.SetAccent(Handle, 4, Theme.PanelTint);
+            acrylic = !WindowMode && Settings.Blur && N.SetAccent(Handle, 4, unchecked((int)0x700C0A0A)); // dark glass tint (AABBGGRR)
             if (!acrylic) N.SetAccent(Handle, 0, 0);
             OnOpened();
             Render(true);
@@ -135,10 +181,14 @@ namespace Harbor
             N.SetForegroundWindow(Handle);
         }
 
+        /// <summary>Any panel closed (an auto-hidden dock re-checks whether it should still be up).</summary>
+        public static event Action AnyClosed;
+
         public void CloseFlyout()
         {
             if (!Visible) return;
             Hide();
+            if (AnyClosed != null) App.Post(() => { if (AnyClosed != null) AnyClosed(); });
             lastCloseTick = Environment.TickCount;
             lastCloseKey = Key;
             if (ownerBar != null) { ownerBar.MarkOpen(null); ownerBar = null; }
@@ -182,20 +232,27 @@ namespace Harbor
             surf.Ensure(W, Math.Max(maxH, contentH) + 2);
             var g = surf.G;
             g.ResetTransform();
+            bool glass = !WindowMode && !OwnGlass;
             g.Clear(acrylic ? Color.Transparent : Theme.PanelSolid);
             g.SmoothingMode = SmoothingMode.AntiAlias;
             g.PixelOffsetMode = PixelOffsetMode.Half;
             g.InterpolationMode = InterpolationMode.HighQualityBicubic;
             g.TextRenderingHint = TextRenderingHint.AntiAliasGridFit;
+            if (glass) PaintGlass(g, W, glassH > 0 ? glassH : maxH); // fixed behind the content: it doesn't scroll
             g.TranslateTransform(0, -scroll);
             hits.Clear();
+            // panels (and the Harbor app) are dark glass, like the island: draw them with the dark palette whatever the Windows theme
+            bool userDark = Theme.Dark;
+            Theme.Dark = true; // Harbor's panels and its app window are always dark glass
             var ui = new UI(this, g, S, W, hits);
             try { Build(ui); }
-            finally { ui.Dispose(); }
+            finally { ui.Dispose(); Theme.Dark = userDark; }
             g.ResetTransform();
             int newContent = (int)Math.Ceiling(ui.Y + 8 * S);
             int newH = FixedLogicalHeight > 0 ? (int)Math.Round(FixedLogicalHeight * S) : Math.Min(maxH, newContent);
             if (newContent > surf.H - 2) { contentH = newContent; Render(place); return; }
+            if (glass && newH != glassH) { glassH = newH; Render(place); return; } // repaint the glass for the new height
+            if (glass) PaintRim(g, W, newH);
             contentH = newContent;
             scroll = Math.Max(0, Math.Min(scroll, contentH - newH));
             if (place || newH != H)
@@ -217,11 +274,12 @@ namespace Harbor
             }
             var scr = Screen.FromRectangle(anchor).WorkingArea;
             int x = align == 0 ? anchor.X : (align == 1 ? anchor.X + anchor.Width / 2 - W / 2 : anchor.Right - W);
-            int gapPx = (int)(6 * S);
+            int gapPx = (int)(GapBelowBar * S);
             int y = above ? anchor.Y - H - gapPx : anchor.Bottom + gapPx;
             x = Math.Max(scr.Left + gapPx, Math.Min(scr.Right - W - gapPx, x));
             y = Math.Max(scr.Top + (above ? gapPx : 0), Math.Min(scr.Bottom - H - gapPx, y));
             N.SetWindowPos(Handle, N.HWND_TOPMOST, x, y, W, H, N.SWP_NOACTIVATE);
+            ApplyShape();
         }
 
         protected override void OnPaintBackground(PaintEventArgs e) { }
@@ -412,6 +470,23 @@ namespace Harbor
 
         public void Glyph(string glyph, RectangleF r, Font font, Brush b) { Text(glyph, r, font, b, 1); }
 
+        /// <summary>A glass tile (the island's look): a light tint, a sheen over its top half, and a hairline edge brighter at the top.</summary>
+        public void Glass(RectangleF r, float radius, int fill = 12, int edge = 26)
+        {
+            using (var p = Gfx.RoundRect(r, radius))
+            {
+                using (var b = new SolidBrush(Color.FromArgb(fill, 255, 255, 255))) G.FillPath(b, p);
+                var clip = G.Clip;
+                G.SetClip(p, CombineMode.Intersect);
+                using (var sheen = new LinearGradientBrush(new RectangleF(r.X, r.Y - 2, r.Width, r.Height * 0.5f + 8), Color.FromArgb(fill + 6, 255, 255, 255), Color.FromArgb(0, 255, 255, 255), 90f))
+                    G.FillRectangle(sheen, r.X, r.Y, r.Width, r.Height * 0.5f);
+                G.Clip = clip;
+                using (var eb = new LinearGradientBrush(new RectangleF(r.X, r.Y - 1, r.Width, r.Height + 2), Color.FromArgb(edge + 14, 255, 255, 255), Color.FromArgb(Math.Max(0, edge - 12), 255, 255, 255), 90f))
+                using (var pen = new Pen(eb, 1f * S))
+                    G.DrawPath(pen, p);
+            }
+        }
+
         public void Fill(RectangleF r, Color c, float radius)
         {
             using (var br = new SolidBrush(c))
@@ -548,7 +623,7 @@ namespace Harbor
             for (int i = 0; i < options.Length; i++)
             {
                 var sr = new RectangleF(r.X + sw * i + 2 * S, r.Y + 2 * S, sw - 4 * S, r.Height - 4 * S);
-                if (i == selected) Fill(sr, Theme.Dark ? Color.FromArgb(70, 255, 255, 255) : Color.White, 6 * S);
+                if (i == selected) Glass(sr, 6 * S, 34, 44);
                 else if (f.Hover == id + i) Fill(sr, Theme.TileHover, 6 * S);
                 Text(options[i], sr, Small, i == selected ? TextBrush : DimBrush, 1);
                 int k = i;

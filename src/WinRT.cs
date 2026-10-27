@@ -166,8 +166,9 @@ namespace Harbor
                 session = s;
                 if (s != null)
                 {
-                    propHandler = (a, b) => App.Post(Load);
-                    playHandler = (a, b) => App.Post(LoadPlayback);
+                    // changes from the app itself (or the keyboard's media keys): read them, then keep checking briefly
+                    propHandler = (a, b) => App.Post(() => { Load(); Settle(2500); });
+                    playHandler = (a, b) => App.Post(() => { LoadPlayback(); Settle(1500); });
                     // apps report the position very often while playing: just note it. Nothing in the menu bar shows it,
                     // and the Now Playing panel redraws on its own clock while it's open.
                     timeHandler = (a, b) => { if (WantTimeline) App.Post(() => LoadTimeline()); };
@@ -179,15 +180,59 @@ namespace Harbor
             Load();
         }
 
+        static bool ActuallyPlaying()
+        {
+            try { return session != null && session.GetPlaybackInfo().PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing; }
+            catch { return false; }
+        }
+
         static void LoadPlayback()
         {
             if (Demo) return;
             var keep = Position; // pausing freezes the clock where it is
-            try { Playing = session != null && session.GetPlaybackInfo().PlaybackStatus == GlobalSystemMediaTransportControlsSessionPlaybackStatus.Playing; }
-            catch { Playing = false; }
+            bool now = ActuallyPlaying();
+            // you just pressed play / pause here: the app takes a moment to say so - keep showing your choice meanwhile
+            if (expect.HasValue && now != expect.Value && Environment.TickCount - expectUntil < 0) now = expect.Value;
+            else expect = null;
+            Playing = now;
             if (Duration > TimeSpan.Zero) { position = keep; positionAt = DateTimeOffset.Now; }
             LoadTimeline();
             Fire();
+        }
+
+        // ---- keeping up with slow apps
+        // Spotify (and others) announce a change before their details are updated, then stay quiet. For a few seconds
+        // after any change or button press, re-read what's playing a few times a second so a late update still shows
+        // at once. Only a different song reloads the cover; nothing runs the rest of the time.
+        static System.Windows.Forms.Timer settle;
+        static int settleUntil, expectUntil;
+        static bool? expect;
+        static bool checking;
+
+        static void Settle(int ms)
+        {
+            if (Demo || session == null) return;
+            int until = Environment.TickCount + ms;
+            if (settle == null || !settle.Enabled || until - settleUntil > 0) settleUntil = until;
+            if (settle == null) { settle = new System.Windows.Forms.Timer { Interval = 300 }; settle.Tick += delegate { SettleTick(); }; }
+            if (!settle.Enabled) settle.Start();
+        }
+
+        static void SettleTick()
+        {
+            if (session == null || Environment.TickCount - settleUntil > 0) { settle.Stop(); return; }
+            if (ActuallyPlaying() != Playing) LoadPlayback();
+            if (checking) return;
+            checking = true;
+            try
+            {
+                Async.Then(session.TryGetMediaPropertiesAsync(), p =>
+                {
+                    checking = false;
+                    if (p != null && (p.Title != Title || p.Artist != Artist)) Load(); // a different song: reload it all
+                });
+            }
+            catch { checking = false; }
         }
 
         static void Load()
@@ -245,18 +290,40 @@ namespace Harbor
 
         public static void PlayPause()
         {
+            if (session != null && !Demo)
+            {
+                // show it straight away; the app confirms a moment later
+                var keep = Position;
+                expect = !Playing;
+                expectUntil = Environment.TickCount + 2000;
+                Playing = expect.Value;
+                if (Duration > TimeSpan.Zero) { position = keep; positionAt = DateTimeOffset.Now; }
+                Fire();
+                Settle(3000);
+            }
             try { if (session != null) { session.TryTogglePlayPauseAsync(); return; } } catch { }
             N.SendKey(0xB3);
         }
 
+        /// <summary>A new track is coming: start its clock from zero and watch for its details.</summary>
+        static void Skipping()
+        {
+            if (session == null || Demo) return;
+            if (Duration > TimeSpan.Zero) { position = TimeSpan.Zero; positionAt = DateTimeOffset.Now; }
+            Fire();
+            Settle(4000);
+        }
+
         public static void Next()
         {
+            Skipping();
             try { if (session != null) { session.TrySkipNextAsync(); return; } } catch { }
             N.SendKey(0xB0);
         }
 
         public static void Previous()
         {
+            Skipping();
             try { if (session != null) { session.TrySkipPreviousAsync(); return; } } catch { }
             N.SendKey(0xB1);
         }

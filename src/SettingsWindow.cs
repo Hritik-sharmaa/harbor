@@ -45,8 +45,18 @@ namespace Harbor
         {
             if (appIcon == null)
             {
-                var arr = ShellIcons.LoadIcons(Application.ExecutablePath, (int)Math.Round(64 * S));
-                appIcon = arr != null ? arr[0] : null;
+                // the artwork built into Harbor.exe (the shell's copy of the exe icon can be an old cached one)
+                try
+                {
+                    using (var st = typeof(SettingsWindow).Assembly.GetManifestResourceStream("Harbor.png"))
+                        if (st != null) using (var b = new Bitmap(st)) appIcon = Gfx.Scale(b, (int)Math.Round(128 * S));
+                }
+                catch { }
+                if (appIcon == null)
+                {
+                    var arr = ShellIcons.LoadIcons(Application.ExecutablePath, (int)Math.Round(64 * S));
+                    appIcon = arr != null ? arr[0] : null;
+                }
             }
         }
 
@@ -109,6 +119,37 @@ namespace Harbor
         // ---- grouped cards (macOS System Settings style) ------------------------------
         // Rows are drawn immediately, so each card's background is painted from the previous frame's
         // measurements; when the layout changes we simply render once more.
+        Bitmap backdrop;
+
+        /// <summary>The window's background, drawn once per size: deep dark, with a soft blue glow top right and violet bottom left.</summary>
+        Bitmap Backdrop(int w, int h)
+        {
+            if (backdrop != null && backdrop.Width == w && backdrop.Height == h) return backdrop;
+            if (backdrop != null) backdrop.Dispose();
+            backdrop = new Bitmap(w, h, System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
+            using (var g = Graphics.FromImage(backdrop))
+            {
+                g.SmoothingMode = SmoothingMode.AntiAlias;
+                using (var br = new LinearGradientBrush(new RectangleF(0, -2, w, h + 4), Color.FromArgb(255, 24, 25, 33), Color.FromArgb(255, 11, 11, 15), 90f))
+                    g.FillRectangle(br, 0, 0, w, h);
+                Glow(g, new RectangleF(w * 0.45f, -h * 0.55f, w * 0.9f, h * 1.0f), Color.FromArgb(70, 60, 120, 255));
+                Glow(g, new RectangleF(-w * 0.2f, h * 0.45f, w * 0.75f, h * 0.9f), Color.FromArgb(48, 150, 90, 255));
+                using (var sheen = new LinearGradientBrush(new RectangleF(0, -2, w, h * 0.35f + 8), Color.FromArgb(14, 255, 255, 255), Color.FromArgb(0, 255, 255, 255), 90f))
+                    g.FillRectangle(sheen, 0, 0, w, h * 0.35f);
+            }
+            return backdrop;
+        }
+
+        static void Glow(Graphics g, RectangleF r, Color c)
+        {
+            using (var p = new GraphicsPath())
+            {
+                p.AddEllipse(r);
+                using (var pg = new PathGradientBrush(p) { CenterColor = c, SurroundColors = new[] { Color.FromArgb(0, c) } })
+                    g.FillPath(pg, p);
+            }
+        }
+
         List<RectangleF> cards = new List<RectangleF>(), building = new List<RectangleF>();
         float cardTop = -1;
 
@@ -130,7 +171,7 @@ namespace Harbor
             cardTop = -1;
         }
 
-        public const string Version = "0.2.0";
+        public const string Version = "0.2.1";
         public const string RepoUrl = "https://github.com/hritik-sharmaa/harbor";
         static readonly string[] pageInfo =
         {
@@ -150,19 +191,18 @@ namespace Harbor
             var g = ui.G;
             float sw = SidebarW * S, W = LogicalWidth * S;
 
+            // ---- background (fixed): deep dark with a soft blue and violet glow, like the island's glass
+            var keep = g.Transform;
+            g.ResetTransform();
+            g.DrawImage(Backdrop((int)W, (int)(FixedLogicalHeight * S) + 2), 0, 0);
+            g.Transform = keep;
+
             // ---- page content (scrolls)
             ui.Pad = sw + 28 * S;
             ui.Right = W - 34 * S;
             ui.Y = 26 * S;
             // card backgrounds measured on the previous frame
-            foreach (var c in cards)
-            {
-                using (var p = Gfx.RoundRect(c, 12 * S))
-                {
-                    using (var br = new SolidBrush(Theme.Dark ? Color.FromArgb(18, 255, 255, 255) : Color.FromArgb(255, 255, 255, 255))) g.FillPath(br, p);
-                    using (var pen = new Pen(Theme.Dark ? Color.FromArgb(22, 255, 255, 255) : Color.FromArgb(20, 0, 0, 0), 1)) g.DrawPath(pen, p);
-                }
-            }
+            foreach (var c in cards) ui.Glass(c, 14 * S, 10, 22);
             building = new List<RectangleF>();
             cardTop = -1;
             if (page != 6)
@@ -190,8 +230,11 @@ namespace Harbor
             // ---- sidebar + window buttons (fixed, drawn on top of the scrolled content)
             var saved = g.Transform;
             g.ResetTransform();
-            using (var br = new SolidBrush(Theme.Dark ? Color.FromArgb(255, 26, 26, 30) : Color.FromArgb(255, 230, 230, 236)))
-                g.FillRectangle(br, 0, 0, sw, FixedLogicalHeight * S + 2);
+            // frosted sidebar: a lighter pane over the glow, with a hairline edge
+            float fh = FixedLogicalHeight * S + 2;
+            g.DrawImage(Backdrop((int)W, (int)fh), new RectangleF(0, 0, sw, fh), new RectangleF(0, 0, sw, fh), GraphicsUnit.Pixel);
+            using (var br = new SolidBrush(Color.FromArgb(14, 255, 255, 255))) g.FillRectangle(br, 0, 0, sw, fh);
+            using (var pen = new Pen(Color.FromArgb(24, 255, 255, 255), 1)) g.DrawLine(pen, sw - 0.5f, 0, sw - 0.5f, fh);
             if (appIcon != null) g.DrawImage(appIcon, new RectangleF(20 * S, 22 * S, 34 * S, 34 * S));
             using (var tf = new Font(Fonts.UiBold, 17f * S, GraphicsUnit.Pixel))
                 ui.Text("Harbor", new RectangleF(62 * S, 19 * S, sw - 70 * S, 24 * S), tf, ui.TextBrush);
@@ -201,11 +244,12 @@ namespace Harbor
             {
                 var r = new RectangleF(10 * S, y, sw - 20 * S, 36 * S);
                 string id = "nav" + i;
-                if (i == page) ui.Fill(r, Theme.Accent, 9 * S);
-                else if (Hover == id) ui.Fill(r, Theme.TileHover, 9 * S);
-                Brush fg = i == page ? Brushes.White : (Brush)ui.TextBrush;
-                ui.Glyph(pageGlyphs[i], new RectangleF(r.X + 8 * S, r.Y, 24 * S, r.Height), ui.Icon, fg);
-                ui.Text(pages[i], new RectangleF(r.X + 42 * S, r.Y, r.Width - 46 * S, r.Height), ui.Body, fg);
+                // the current page: a glossy glass pill with its icon in the accent colour
+                if (i == page) ui.Glass(r, 10 * S, 26, 40);
+                else if (Hover == id) ui.Fill(r, Color.FromArgb(14, 255, 255, 255), 10 * S);
+                using (var accent = new SolidBrush(Theme.Accent))
+                    ui.Glyph(pageGlyphs[i], new RectangleF(r.X + 8 * S, r.Y, 24 * S, r.Height), ui.Icon, i == page ? (Brush)accent : ui.DimBrush);
+                ui.Text(pages[i], new RectangleF(r.X + 42 * S, r.Y, r.Width - 46 * S, r.Height), i == page ? ui.Bold : ui.Body, ui.TextBrush);
                 int k = i;
                 ui.AddHit(id, r, () => { page = k; Hover = null; ResetScroll(); }, true).Fixed = true;
                 y += 40 * S;

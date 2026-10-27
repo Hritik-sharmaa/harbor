@@ -44,6 +44,8 @@ namespace Harbor
             if (Media.Demo) { result = Demo(); return State.Ready; }
             string key = Key(Media.Artist, Media.Title);
             if (cache.TryGetValue(key, out result)) return State.Ready;
+            var saved = FromDisk(key);
+            if (saved != null) { Store(key, saved); result = saved; return State.Ready; } // played before: no request
             if (loadingKey != key) Fetch(key, Media.Artist, Media.Title, Media.Album, Media.Duration);
             return State.Loading;
         }
@@ -56,6 +58,7 @@ namespace Harbor
                 Result r;
                 try { r = Lookup(artist, title, album, duration); }
                 catch (Exception ex) { App.Log(ex); r = new Result { Failed = true }; }
+                ToDisk(key, r);
                 App.Post(() =>
                 {
                     if (loadingKey == key) loadingKey = null;
@@ -71,7 +74,7 @@ namespace Harbor
             {
                 // keep the failure only briefly so reopening the panel later tries again
                 cache[key] = r;
-                var t = new System.Windows.Forms.Timer { Interval = 30000 };
+                var t = new System.Windows.Forms.Timer { Interval = 15000 };
                 t.Tick += delegate { t.Stop(); t.Dispose(); Result cur; if (cache.TryGetValue(key, out cur) && cur == r) cache.Remove(key); };
                 t.Start();
                 return;
@@ -111,39 +114,136 @@ namespace Harbor
 
         const string Api = "https://lrclib.net/api/";
 
+        /// <summary>
+        /// LRCLIB, asked in order of precision: the exact song (title + artist + length; no album, which often differs
+        /// between Spotify and LRCLIB), the same with just the main artist and a cleaned title, a search, and a free-text
+        /// search. A busy server (503, timeouts) is retried; only if it stays unreachable is the result "Failed".
+        /// </summary>
         static Result Lookup(string artist, string title, string album, TimeSpan duration)
         {
             if (string.IsNullOrWhiteSpace(title)) return new Result { NotFound = true };
-            // 1) exact match on title + artist (+ album and length when known)
-            var q = new StringBuilder("get?track_name=").Append(Uri.EscapeDataString(title))
-                .Append("&artist_name=").Append(Uri.EscapeDataString(artist ?? ""));
-            if (!string.IsNullOrWhiteSpace(album)) q.Append("&album_name=").Append(Uri.EscapeDataString(album));
-            if (duration > TimeSpan.Zero) q.Append("&duration=").Append((int)Math.Round(duration.TotalSeconds));
-            int status;
-            string json = Web.Get(Api + q, out status);
-            if (status == 200) { var r = FromJson(new JavaScriptSerializer().Deserialize<Dictionary<string, object>>(json)); if (r != null) return r; }
-            else if (status != 404) return new Result { Failed = true };
+            // "Song (feat. X)", "Song - Remastered 2011", "Song (From "Movie")", "Song - From "Movie"" → "Song"
+            string clean = Regex.Replace(title, @"\s*[\(\[][^\)\]]*\b(feat|ft\.|with|remaster|version|live|edit|mix|from)\b[^\)\]]*[\)\]]|\s+-\s+.*\b(remaster|version|live|edit|mix|from)\b.*$", "", RegexOptions.IgnoreCase).Trim();
+            if (clean == "") clean = title;
+            string mainArtist = Regex.Split(artist ?? "", @"\s*(?:,|&|\bfeat\.?|\bft\.|\bx\b|\band\b)\s*", RegexOptions.IgnoreCase)[0].Trim();
+            string len = duration > TimeSpan.Zero ? "&duration=" + (int)Math.Round(duration.TotalSeconds) : "";
+            bool busy = false;
 
-            // 2) search with a cleaned title ("Song - Remastered 2011", "Song (feat. X)") and pick the closest length
-            string clean = Regex.Replace(title, @"\s*[\(\[].*?(feat|ft\.|with|remaster|version|live|edit|mix).*?[\)\]]|\s+-\s+.*(remaster|version|live|edit|mix).*$", "", RegexOptions.IgnoreCase).Trim();
-            string mainArtist = Regex.Split(artist ?? "", @"\s*(,|&|feat\.?|ft\.|x)\s+", RegexOptions.IgnoreCase)[0];
-            json = Web.Get(Api + "search?track_name=" + Uri.EscapeDataString(clean) + "&artist_name=" + Uri.EscapeDataString(mainArtist), out status);
-            if (status != 200 && status != 404) return new Result { Failed = true };
-            var best = status == 200 ? Pick(json, duration, null) : null;
+            // 1) exact matches
+            var tries = new List<string[]> { new[] { title, artist ?? "" } };
+            if (mainArtist != (artist ?? "")) tries.Add(new[] { title, mainArtist });
+            if (clean != title) tries.Add(new[] { clean, mainArtist });
+            foreach (var t in tries)
+            {
+                int status;
+                string json = Ask(Api + "get?track_name=" + Uri.EscapeDataString(t[0]) + "&artist_name=" + Uri.EscapeDataString(t[1]) + len, out status);
+                if (status == 200) { var r = FromJson(new JavaScriptSerializer().Deserialize<Dictionary<string, object>>(json)); if (r != null) return r; }
+                else if (status != 404) busy = true;
+            }
+
+            // 2) search by title + main artist, closest length wins
+            int s2;
+            string j2 = Ask(Api + "search?track_name=" + Uri.EscapeDataString(clean) + "&artist_name=" + Uri.EscapeDataString(mainArtist), out s2);
+            var best = s2 == 200 ? Pick(j2, duration, null, 10) : null; // same title and artist: a few seconds apart is the same song
+            if (s2 != 200 && s2 != 404) busy = true;
 
             // 3) free-text search ("title artist") catches songs filed under a different name. Looser, so a match
             //    must have the same length (within 4 s), or the same title when the app doesn't report a length.
             if (best == null)
             {
-                json = Web.Get(Api + "search?q=" + Uri.EscapeDataString(clean + " " + mainArtist), out status);
-                if (status != 200 && status != 404) return new Result { Failed = true };
-                if (status == 200) best = Pick(json, duration, clean);
+                int s3;
+                string j3 = Ask(Api + "search?q=" + Uri.EscapeDataString(clean + " " + mainArtist), out s3);
+                if (s3 == 200) best = Pick(j3, duration, clean, 4);
+                else if (s3 != 404) busy = true;
             }
-            return (best != null ? FromJson(best) : null) ?? new Result { NotFound = true };
+            var found = best != null ? FromJson(best) : null;
+            if (found != null) return found;
+            // the server was busy on some step: don't conclude it has no lyrics, try again later
+            return busy ? new Result { Failed = true } : new Result { NotFound = true };
+        }
+
+        /// <summary>A GET that waits out a busy server: retries 503 / 429 / timeouts twice, with a short pause.</summary>
+        static string Ask(string url, out int status)
+        {
+            string json = null;
+            status = 0;
+            for (int attempt = 0; attempt < 3; attempt++)
+            {
+                if (attempt > 0) System.Threading.Thread.Sleep(attempt == 1 ? 700 : 1600);
+                json = Web.Get(url, out status);
+                if (status == 200 || status == 404 || (status >= 400 && status < 500 && status != 429)) break;
+            }
+            return json;
+        }
+
+        // ------------------------------------------------------------------ remembered on disk
+
+        // Lyrics found once are kept in %LOCALAPPDATA%\Harbor\lyrics: a song you've played before shows its lyrics
+        // instantly with no request. "Not on LRCLIB" is remembered for 3 days, then looked up again.
+        static string CacheDir { get { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Harbor", "lyrics"); } }
+
+        static string CacheFile(string key)
+        {
+            using (var sha = System.Security.Cryptography.SHA1.Create())
+                return Path.Combine(CacheDir, BitConverter.ToString(sha.ComputeHash(Encoding.UTF8.GetBytes(key))).Replace("-", "").Substring(0, 24) + ".txt");
+        }
+
+        static Result FromDisk(string key)
+        {
+            try
+            {
+                string f = CacheFile(key);
+                if (!File.Exists(f)) return null;
+                string text = File.ReadAllText(f, Encoding.UTF8);
+                if (text.Length < 1) return null;
+                string body = text.Length > 2 ? text.Substring(2) : "";
+                switch (text[0])
+                {
+                    case 'S': var lines = Parse(body); return lines != null && lines.Count > 0 ? new Result { Synced = lines } : null;
+                    case 'P': return new Result { Plain = body };
+                    case 'I': return new Result { Instrumental = true };
+                    case 'N': return (DateTime.Now - File.GetLastWriteTime(f)).TotalDays < 3 ? new Result { NotFound = true } : null;
+                }
+            }
+            catch { }
+            return null;
+        }
+
+        static void ToDisk(string key, Result r)
+        {
+            if (r.Failed || Media.Demo) return;
+            try
+            {
+                Directory.CreateDirectory(CacheDir);
+                var sb = new StringBuilder();
+                if (r.Synced != null)
+                {
+                    sb.Append("S\n");
+                    foreach (var l in r.Synced)
+                        sb.Append('[').Append(((int)l.At.TotalMinutes).ToString("00")).Append(':').Append(l.At.Seconds.ToString("00")).Append('.')
+                          .Append((l.At.Milliseconds / 10).ToString("00")).Append(']').Append(l.Text).Append('\n');
+                }
+                else if (r.Plain != null) sb.Append("P\n").Append(r.Plain);
+                else if (r.Instrumental) sb.Append("I\n");
+                else sb.Append("N\n");
+                File.WriteAllText(CacheFile(key), sb.ToString(), Encoding.UTF8);
+            }
+            catch (Exception ex) { App.Log(ex); }
+        }
+
+        /// <summary>"Try again" after a failed lookup.</summary>
+        public static void Retry()
+        {
+            if (!Media.Has) return;
+            string key = Key(Media.Artist, Media.Title);
+            Result r;
+            if (cache.TryGetValue(key, out r) && (r.Failed || r.NotFound)) cache.Remove(key);
+            if (r != null && r.NotFound) try { File.Delete(CacheFile(key)); } catch { }
+            if (Changed != null) Changed();
         }
 
         /// <summary>The closest-length result (synced lyrics preferred); null if none is the same recording.</summary>
-        static Dictionary<string, object> Pick(string json, TimeSpan duration, string mustContainTitle)
+        static Dictionary<string, object> Pick(string json, TimeSpan duration, string mustContainTitle, double tolerance)
         {
             var list = new JavaScriptSerializer().Deserialize<List<Dictionary<string, object>>>(json);
             Dictionary<string, object> best = null;
@@ -151,7 +251,7 @@ namespace Harbor
             foreach (var item in list)
             {
                 double d = duration > TimeSpan.Zero ? Math.Abs(Num(item, "duration") - duration.TotalSeconds) : 0;
-                if (duration > TimeSpan.Zero && d > 4) continue;              // a different recording
+                if (duration > TimeSpan.Zero && d > tolerance) continue;      // a different recording
                 if (duration <= TimeSpan.Zero && mustContainTitle != null)
                 {
                     object tn;

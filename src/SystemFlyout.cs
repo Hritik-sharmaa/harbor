@@ -83,11 +83,7 @@ namespace Harbor
             top = list.GetRange(0, Math.Min(6, list.Count));
         }
 
-        void Card(UI ui, RectangleF r)
-        {
-            ui.Fill(r, Theme.Tile, 14 * S);
-            using (var pen = new Pen(Theme.TileBorder, 1)) using (var p = Gfx.RoundRect(r, 14 * S)) ui.G.DrawPath(pen, p);
-        }
+        void Card(UI ui, RectangleF r) { ui.Glass(r, 16 * S, 12, 26); }
 
         protected override void Build(UI ui)
         {
