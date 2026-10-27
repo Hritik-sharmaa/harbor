@@ -171,7 +171,9 @@ namespace Harbor
             scroll = 0;
             Hover = Pressed = Dragging = null;
             var h = Handle;
-            acrylic = !WindowMode && Settings.Blur && N.SetAccent(Handle, 4, unchecked((int)0x700C0A0A)); // dark glass tint (AABBGGRR)
+            // no Windows blur behind panels: it fills the whole window rectangle and ignores the rounded shape,
+            // which showed as a square box with corners around the glass. The glass is painted (sheen + rim) instead.
+            acrylic = false;
             if (!acrylic) N.SetAccent(Handle, 0, 0);
             OnOpened();
             Render(true);

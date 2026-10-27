@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.2.2 — 2026-10-27 (preview)
+
+**Fixed**
+- The notch and panels showed a square, blurred box with corners around their rounded shape. Windows' blur fills the whole window rectangle and ignores the rounded shape, so it's switched off for panels. They're now solid dark glass, with the sheen and light rim kept.
+
 ## 0.2.1 — 2026-10-27 (preview)
 
 **New look**
