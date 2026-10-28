@@ -40,6 +40,7 @@ namespace Harbor
         public TopBar(Display d)
         {
             Disp = d;
+            AllowDrop = true; // files dragged to the centre go on the island's shelf
             FormBorderStyle = FormBorderStyle.None;
             ShowInTaskbar = false;
             StartPosition = FormStartPosition.Manual;
@@ -47,6 +48,27 @@ namespace Harbor
             Bounds = new Rectangle(0, -100, 10, 10);
             minute.Tick += delegate { ArmMinute(); if (Disp.Primary) RefreshNet(); RenderBar(); };
             tipTimer.Tick += delegate { tipTimer.Stop(); ShowTip(); };
+        }
+
+        // ---- files dragged onto the centre of the bar open the island's shelf
+        protected override void OnDragEnter(DragEventArgs e) { base.OnDragEnter(e); DragToShelf(e); }
+        protected override void OnDragOver(DragEventArgs e) { base.OnDragOver(e); DragToShelf(e); }
+
+        void DragToShelf(DragEventArgs e)
+        {
+            e.Effect = DragDropEffects.None;
+            if (!Look.Bool("Island") || e.Data == null || !e.Data.GetDataPresent(DataFormats.FileDrop)) return;
+            var p = PointToClient(new Point(e.X, e.Y));
+            if (Math.Abs(p.X - ClientSize.Width / 2f) > 160 * Disp.Scale) return;
+            e.Effect = (e.AllowedEffect & DragDropEffects.Copy) != 0 ? DragDropEffects.Copy : DragDropEffects.Link;
+            if (!global::Harbor.Island.IsOpen) global::Harbor.Island.OpenForDrop(this);
+        }
+
+        protected override void OnDragDrop(DragEventArgs e)
+        {
+            base.OnDragDrop(e);
+            var files = e.Data != null ? e.Data.GetData(DataFormats.FileDrop) as string[] : null;
+            if (files != null) Shelf.Add(files);
         }
 
         protected override void Dispose(bool disposing)

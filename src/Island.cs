@@ -12,13 +12,13 @@ namespace Harbor
     /// Media (with lyrics), Pomodoro, Weather and Screen Time. It never takes keyboard focus, and it closes
     /// when the mouse leaves. It redraws only while something on it moves.
     /// </summary>
-    sealed class Island : Flyout
+    sealed partial class Island : Flyout
     {
         static Island inst;
 
-        static readonly string[] tabs = { "dashboard", "media", "pomodoro", "weather", "screentime", "reminders", "ai" };
-        static readonly string[] tabNames = { "Dashboard", "Media", "Pomodoro", "Weather", "Screen Time", "Reminders", "AI Coding" };
-        static readonly string[] tabGlyphs = { "", "", "", null, "", "", "" }; // weather draws its own icon
+        static readonly string[] tabs = { "dashboard", "media", "pomodoro", "weather", "screentime", "reminders", "clipboard", "shelf", "ai", "usage" };
+        static readonly string[] tabNames = { "Dashboard", "Media", "Pomodoro", "Weather", "Screen Time", "Reminders", "Clipboard", "Shelf", "AI Coding", "Claude Usage" };
+        static readonly string[] tabGlyphs = { "", "", "", null, "", "", "\uE77F", "\uE7B8", "", "\uE9D9" }; // weather draws its own icon
 
         string tab;
         RectangleF trigger;                 // the menu-bar area that opened us (screen coordinates)
@@ -44,6 +44,10 @@ namespace Harbor
             Reminders.Changed += delegate { if (Visible) Refresh2(); };
             ClaudeBridge.Changed += delegate { if (Visible) Refresh2(); };
             ClaudeHistory.Changed += delegate { if (Visible && tab == "ai") Refresh2(); };
+            ClipboardHistory.Changed += delegate { if (Visible && tab == "clipboard") Refresh2(); };
+            Shelf.Changed += delegate { if (Visible && tab == "shelf") Refresh2(); };
+            ClaudeUsage.Changed += delegate { if (Visible && tab == "usage") Refresh2(); };
+            AllowDrop = true; // files dropped on the notch go on the shelf
             tick.Tick += delegate { Tick(); };
             shapeAnim.Tick += delegate { AnimateShape(); };
             watch.Tick += delegate { Watch(); };
@@ -115,7 +119,7 @@ namespace Harbor
             var p = Cursor.Position;
             var me = new RectangleF(Left, Top - 8, Width, Height + 8);
             // stay while you're over it, typing a reminder, or Claude is waiting for your answer
-            if (me.Contains(p) || RectangleF.Inflate(trigger, 6, 0).Contains(p) || Dragging != null || FocusField != null || ClaudeBridge.Pending.Count > 0) { outsideMs = 0; return; }
+            if (me.Contains(p) || RectangleF.Inflate(trigger, 6, 0).Contains(p) || Dragging != null || dragOut || StillDropping() || FocusField != null || ClaudeBridge.Pending.Count > 0) { outsideMs = 0; return; }
             outsideMs += watch.Interval;
             if (outsideMs >= 400) Shrink();
         }
@@ -128,12 +132,13 @@ namespace Harbor
             bool need = Dragging != null
                 || (tab == "media" && (view.Animating || (Media.Playing && age > 250)))
                 || ((tab == "pomodoro" || tab == "dashboard" || tab == "ai") && age > 1000)
-                || (tab == "screentime" && age > 15000);
+                || ((tab == "screentime" || tab == "usage") && age > 15000);
             if (need) { lastFrame = now; Refresh2(); }
         }
 
         protected override void OnMouseUp(MouseEventArgs e)
         {
+            dragKey = null;
             view.MouseUp(this);
             base.OnMouseUp(e);
         }
@@ -142,6 +147,7 @@ namespace Harbor
         protected override void OnMouseDown(MouseEventArgs e)
         {
             base.OnMouseDown(e);
+            StartDragFrom(e);
             if (FocusField != null) { Activate(); N.SetForegroundWindow(Handle); }
         }
 
@@ -259,6 +265,7 @@ namespace Harbor
             float W = ui.W, H = FixedLogicalHeight * S;
             Glass(ui.G, W, H);
 
+            drags.Clear();
             var c = new RectangleF(Pad * S, 18 * S, W - 2 * Pad * S, H - 18 * S - TabBarH * S);
             using (var f = new Fonts2(S))
             {
@@ -271,6 +278,9 @@ namespace Harbor
                     case "pomodoro": PomodoroTab(ui, c, f); break;
                     case "weather": WeatherTab(ui, c, f); break;
                     case "screentime": ScreenTimeTab(ui, c, f); break;
+                    case "clipboard": ClipboardTab(ui, c, f); break;
+                    case "shelf": ShelfTab(ui, c, f); break;
+                    case "usage": UsageTab(ui, c, f); break;
                 }
                 TabBar(ui, new RectangleF(0, H - TabBarH * S, W, TabBarH * S), f);
             }

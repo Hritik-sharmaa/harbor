@@ -139,6 +139,7 @@ namespace Harbor
             Banners.Apply();
             ScreenTime.Init();
             Reminders.Init();
+            ClipboardHistory.Init();
             ClaudeBridge.Start();
             ClaudeBridge.EnsureHooks(Application.ExecutablePath); // e.g. a new editor or account profile since last time
             ClaudeBridge.Asked += Island.Attention;
@@ -651,6 +652,7 @@ namespace Harbor
         {
             if (quitting) return;
             quitting = true;
+            ClipboardHistory.Stop(); // its copied images are only kept while Harbor runs
             EmergencyRestore();
             Application.Exit();
         }
@@ -725,7 +727,7 @@ namespace Harbor
             shots.Add(new KeyValuePair<string, Flyout>("f_menu", mf));
             shots.Add(new KeyValuePair<string, Flyout>("f_nc", new NotificationCenter()));
             shots.Add(new KeyValuePair<string, Flyout>("f_sys", new SystemFlyout()));
-            foreach (var t in new[] { "dashboard", "media", "pomodoro", "weather", "screentime", "reminders", "ai" })
+            foreach (var t in new[] { "dashboard", "media", "pomodoro", "weather", "screentime", "reminders", "clipboard", "shelf", "ai", "usage" })
                 shots.Add(new KeyValuePair<string, Flyout>("island_" + t, Island.ForSnapshot(t)));
             foreach (int pg in new[] { 0, 1, 2, 3, 4, 6 }) shots.Add(new KeyValuePair<string, Flyout>("w_settings" + pg, new SettingsWindow { Page = pg }));
             // give async sources (radios, media, bluetooth list) a moment to arrive
@@ -815,6 +817,9 @@ namespace Harbor
             Pomodoro.UseDemo();
             Reminders.UseDemo();
             ClaudeHistory.UseDemo();
+            ClaudeUsage.UseDemo();
+            ClipboardHistory.UseDemo();
+            Shelf.UseDemo();
             ClaudeBridge.UseDemo();
             foreach (var d in Displays) d.Bar.RenderBar();
         }

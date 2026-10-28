@@ -171,7 +171,7 @@ namespace Harbor
             cardTop = -1;
         }
 
-        public const string Version = "0.2.2";
+        public const string Version = "0.2.3";
         public const string RepoUrl = "https://github.com/hritik-sharmaa/harbor";
         static readonly string[] pageInfo =
         {
@@ -301,7 +301,7 @@ namespace Harbor
             Toggle(ui, "Lyrics", "Song lyrics in Now Playing", "From lrclib.net: sends the song's title, artist and length while the panel is open");
 
             Card(ui, "Island");
-            Toggle(ui, "Island", "Island in the centre of the menu bar", "Rest the mouse there for Media, Pomodoro, Weather and Screen Time");
+            Toggle(ui, "Island", "Island in the centre of the menu bar", "Rest the mouse there for Media, Pomodoro, Weather, Screen Time, Clipboard, Shelf and Claude");
             if (Look.Bool("Island"))
             {
                 ui.Info("Weather city (forecasts from Open-Meteo: free, no account)");
@@ -316,6 +316,7 @@ namespace Harbor
                 Int(ui, "PomoShort", "Pomodoro: short break", 1, 30, " min");
                 Int(ui, "PomoLong", "Pomodoro: long break", 5, 60, " min");
                 ui.ToggleRow("stime", "Screen Time", Look.Bool("ScreenTime"), v => { Look.Set("ScreenTime", v); Settings.Save(); if (v) ScreenTime.Init(); }, "Time per app, counted and kept on this PC only");
+                ui.ToggleRow("cliph", "Clipboard history", Look.Bool("ClipboardHistory"), v => { Look.Set("ClipboardHistory", v); Settings.Save(); ClipboardHistory.Init(); }, "Your last 30 copies and screenshots. Kept in memory and cleared when Harbor quits; password managers' copies are skipped");
             }
 
             Card(ui, "Claude Code");

@@ -90,6 +90,8 @@ Rest the mouse on the centre of the menu bar and a dark panel drops down, like a
   <img src="docs/screenshots/island_media.png" alt="Island: Media with lyrics" width="49%">
   <img src="docs/screenshots/island_ai.png" alt="Island: AI Coding with a Claude Code permission request" width="49%">
   <img src="docs/screenshots/island_weather.png" alt="Island: Weather" width="49%">
+  <img src="docs/screenshots/island_clipboard.png" alt="Island: Clipboard history with a screenshot" width="49%">
+  <img src="docs/screenshots/island_usage.png" alt="Island: Claude usage limits and the last 7 days" width="49%">
 </p>
 
 | Tab | What's in it |
@@ -100,7 +102,10 @@ Rest the mouse on the centre of the menu bar and a dark panel drops down, like a
 | **Weather** | Now, feels-like, humidity, wind, UV, rain chance, pressure and the next 12 hours, from [Open-Meteo](https://open-meteo.com) for the city you set |
 | **Screen Time** | Today's time per app and per category, counted and kept on your PC |
 | **Reminders** | Quick reminders with optional due times; a banner tells you when one is due |
+| **Clipboard** | Your last 30 copies (text, links, images, files) and every new screenshot. Click to copy again, drag images and files out |
+| **Shelf** | Drag files onto the centre of the menu bar to keep them here, then drag them out wherever you need them |
 | **AI Coding** | Your [Claude Code](https://claude.com/claude-code) sessions with live status (Running / Waiting / Done), model, branch, messages and tokens. When Claude asks permission, the island pops up with **Allow / Always allow / Deny** |
+| **Claude Usage** | Your plan limits (session and week) as Claude Code last saved them, plus tokens per day for the last 7 days on this PC, by editor and model |
 
 Set your city, working hours, Pomodoro lengths and the Claude Code link in **Harbor → General → Island**.
 
@@ -197,7 +202,8 @@ bin\Harbor.exe --install
 | `src/SettingsWindow.cs`, `src/Look.cs`, `src/Settings.cs` | The Harbor app and `settings.ini` |
 | `src/ShellIcons.cs` | Icon loading and the WhiteSur-style icon renderer |
 | `src/SystemStatus.cs`, `src/SysInfo.cs`, `src/BtBattery.cs`, `src/WinRT.cs` | Wi‑Fi, audio, brightness, stats, Bluetooth, media and notifications |
-| `src/Island.cs`, `src/NowPlaying.cs` | The island and its tabs; the Now Playing view shared with the media panel |
+| `src/Island.cs`, `src/IslandMore.cs`, `src/NowPlaying.cs` | The island and its tabs; the Now Playing view shared with the media panel |
+| `src/ClipboardHistory.cs`, `src/Shelf.cs`, `src/ClaudeUsage.cs` | Clipboard history, the file shelf, Claude usage |
 | `src/Pomodoro.cs`, `src/Weather.cs`, `src/ScreenTime.cs`, `src/Reminders.cs` | Pomodoro timer, Open-Meteo weather and icons, Screen Time tracking, reminders |
 | `src/ClaudeBridge.cs`, `src/ClaudeHistory.cs` | Claude Code hook, local pipe and settings edit; reading session history |
 | `src/Lyrics.cs`, `src/Banners.cs`, `src/ShellDrag.cs` | LRCLIB lyrics, notification banners, dragging files out of stacks |
@@ -216,6 +222,9 @@ Everything else stays on your PC:
 - Notifications, media info and system stats are read locally to draw the UI and are never stored or sent anywhere.
 - **Screen Time** and **Reminders** are saved in `%APPDATA%\Harbor`.
 - **Claude Code** events go from the hook to Harbor over a private local pipe, and its session history is read from your own `.claude` folder.
+- **Clipboard** history is kept in memory only. Copied images are written to `%LOCALAPPDATA%\Harbor\clipboard` so you can drag them out, and deleted when Harbor quits. Copies that password managers mark as private are skipped.
+- **Shelf** saves only the paths of the files you put on it, in `%APPDATA%\Harbor\shelf.txt`.
+- **Claude Usage** reads the limits Claude Code saved in its own `.claude.json` and counts tokens from its history files. Your Claude login is never read or used.
 
 ## Credits
 

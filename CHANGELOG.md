@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.2.3 — 2026-10-28 (preview)
+
+**New in the island**
+- **Clipboard:** your last 30 copies (text, links, images, files) and every new screenshot (Win+Shift+S, PrtScn, Win+PrtScn). Click one to copy it again; drag images and files straight into a browser, chat or folder. Filter by Text or Images. Text is kept in memory only, and copied images are deleted when Harbor quits. Copies that password managers mark as private are skipped. Turn it off in **Harbor → General → Island**.
+- **Shelf:** drag files onto the centre of the menu bar. The island opens on the shelf; drop them there, then drag them out later wherever you need them. Click to open, right-click to show in Explorer. Only the paths are kept; the files stay where they are.
+- **Claude Usage:** your plan limits (current session and this week) as Claude Code last saved them. That's the VS Code extension's copy if it's the newest; type `/usage` in Claude Code to update it. Also tokens per day for the last 7 days from Claude Code's history on this PC, split by editor (VS Code, Antigravity, Desktop & CLI) and by model. Everything is read locally and only while the tab is open; your login is never touched.
+
+**Fixed**
+- After an hour or so, an auto-hidden dock sometimes wouldn't come back when you moved the mouse to the bottom edge. Another window could end up over the thin strip the dock watches, so while hidden the dock now also checks the cursor position directly. When the cursor is at the edge, the dock comes up and puts itself back on top.
+
 ## 0.2.2 — 2026-10-27 (preview)
 
 **Fixed**

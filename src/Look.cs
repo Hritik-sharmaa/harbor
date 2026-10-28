@@ -34,7 +34,7 @@ namespace Harbor
             { "CornerTL", "none" }, { "CornerTR", "none" }, { "Hotkeys", "1" },
             { "NcWidgets", "1" }, { "Banners", "1" }, { "Lyrics", "1" },
             // island (centre of the menu bar)
-            { "Island", "1" }, { "IslandTab", "dashboard" },
+            { "Island", "1" }, { "IslandTab", "dashboard" }, { "ClipboardHistory", "1" },
             { "PomoWork", "25" }, { "PomoShort", "5" }, { "PomoLong", "15" }, { "PomoToday", "" },
             { "DayStart", "9" }, { "DayEnd", "18" },
             { "WeatherCity", "" }, { "WeatherPlace", "" }, { "WeatherLat", "" }, { "WeatherLon", "" }, { "WeatherUnit", "C" },

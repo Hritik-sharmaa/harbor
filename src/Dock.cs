@@ -179,6 +179,7 @@ namespace Harbor
             AllowDrop = true;
             wrapAttr.SetWrapMode(WrapMode.TileFlipXY);
             anim.Tick += delegate { Tick(); };
+            edgeWatch.Tick += delegate { WatchEdge(); };
 
         }
 
@@ -575,7 +576,9 @@ namespace Harbor
             else
             {
                 bar.Unregister();
-                RECT wk = N.MonitorInfo(Disp.HMon).rcWork;
+                // with the Windows taskbar hidden, hug the real screen edge: the "work area" can briefly still leave room
+                // for the taskbar (e.g. waking up), and a dock placed above the edge could never be reached by the mouse
+                RECT wk = Settings.HideTaskbar ? mon : N.MonitorInfo(Disp.HMon).rcWork;
                 bottomEdge = pos == "left" ? wk.Left : (pos == "right" ? wk.Right : wk.Bottom);
             }
             foreach (var it in items) if (!it.IsSep) EnsureIcon(it);
@@ -939,7 +942,7 @@ namespace Harbor
             float showTarget = 1;
             if (Settings.AutoHide && !App.SnapshotMode)
             {
-                bool keep = hovering || dragging || MenuOpen || pressIdx >= 0 || (Look.Bool("DockSmartHide") && !overlapped);
+                bool keep = hovering || dragging || MenuOpen || pressIdx >= 0 || (Look.Bool("DockSmartHide") && !overlapped) || now < edgeUntil;
                 if (keep) lastKeep = now;
                 else if (now - lastKeep < 450) active = true; // waiting out the hide delay
                 showTarget = (keep || now - lastKeep < 450) ? 1 : 0;
@@ -955,6 +958,41 @@ namespace Harbor
 
             if (active || dirty) Render();
             if (!active) StopAnim();
+            // hidden: watch the screen edge ourselves too (see WatchEdge)
+            if (Settings.AutoHide && !App.SnapshotMode && !hidden && shown <= 0.001f) { if (!edgeWatch.Enabled) { edgeHalf = BaseWidth() / 2 + 24 * S; edgeWatch.Start(); } }
+            else edgeWatch.Stop();
+        }
+
+        // ---- bringing a hidden dock back
+        // The dock normally notices the mouse through a 2 px strip at the screen edge. After a while (a lock, the
+        // screen sleeping, an app claiming always-on-top) another window can end up over that strip and the dock
+        // would never come back. So while it's hidden, it also checks where the cursor is, 4 times a second.
+        readonly Timer edgeWatch = new Timer { Interval = 250 };
+        float edgeHalf; // half the dock's length, measured when the watch starts
+        long edgeUntil;
+
+        void WatchEdge()
+        {
+            if (!Settings.AutoHide || hidden || shown > 0.001f) { edgeWatch.Stop(); return; }
+            POINT c;
+            if (!N.GetCursorPos(out c) || monWidth <= 0) return;
+            float half = edgeHalf;
+            int right = monLeft + monWidth, bottom = monTop + monHeight;
+            bool atEdge;
+            if (pos == "left") atEdge = c.X <= monLeft + 1 && Math.Abs(c.Y - (monTop + monHeight / 2f)) <= half;
+            else if (pos == "right") atEdge = c.X >= right - 2 && c.X < right + 1 && Math.Abs(c.Y - (monTop + monHeight / 2f)) <= half;
+            else atEdge = c.Y >= bottom - 2 && c.Y < bottom + 1 && Math.Abs(c.X - (monLeft + monWidth / 2f)) <= half;
+            if (!atEdge) return;
+            edgeUntil = clock.ElapsedMilliseconds + 700; // long enough for the mouse to move onto the dock itself
+            EnsureTopmost();
+            Kick();
+        }
+
+        /// <summary>Puts the dock back on top of other always-on-top windows (something can push it under over time).</summary>
+        public void EnsureTopmost()
+        {
+            if (!IsHandleCreated || hidden || Flyout.AnyOpen) return;
+            N.SetWindowPos(Handle, N.HWND_TOPMOST, 0, 0, 0, 0, N.SWP_NOMOVE | N.SWP_NOSIZE | N.SWP_NOACTIVATE);
         }
 
         // ------------------------------------------------------------------ input
