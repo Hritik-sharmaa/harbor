@@ -197,7 +197,10 @@ namespace Harbor
         {
             Volume.Init(); // follows the current default device (headphones plugged in, etc.)
             sessions = Volume.Sessions();
+            outputs = AudioOutputs.List();
         }
+
+        List<AudioOutputs.Device> outputs = new List<AudioOutputs.Device>();
 
         protected override void OnClosedFlyout()
         {
@@ -232,7 +235,17 @@ namespace Harbor
                 }
             }
             ui.Separator();
-            ui.Item("out", "Output Device…", () => Launcher.Run("ms-settings:sound"));
+            if (outputs.Count > 1)
+            {
+                ui.Section("Output");
+                foreach (var o in outputs)
+                {
+                    var d = o;
+                    ui.Item("out" + d.Id, d.Name, () => { if (AudioOutputs.SetDefault(d)) outputs = AudioOutputs.List(); }, d.Name.IndexOf("Head", StringComparison.OrdinalIgnoreCase) >= 0 ? "" : "", check: d.Default, keep: true);
+                }
+                ui.Separator();
+            }
+            ui.Item("out", "Sound Settings…", () => Launcher.Run("ms-settings:sound"));
             ui.Item("mix", "Volume Mixer…", () => Launcher.Run("ms-settings:apps-volume"));
         }
     }

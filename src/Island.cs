@@ -47,6 +47,7 @@ namespace Harbor
             ClipboardHistory.Changed += delegate { if (Visible && tab == "clipboard") Refresh2(); };
             Shelf.Changed += delegate { if (Visible && tab == "shelf") Refresh2(); };
             ClaudeUsage.Changed += delegate { if (Visible && tab == "usage") Refresh2(); };
+            FocusMode.Changed += delegate { if (Visible) Refresh2(); };
             AllowDrop = true; // files dropped on the notch go on the shelf
             tick.Tick += delegate { Tick(); };
             shapeAnim.Tick += delegate { AnimateShape(); };
@@ -368,6 +369,7 @@ namespace Harbor
             ui.Text(Media.Title, new RectangleF(tx, art.Y + 12 * S, tw, 22 * S), f.Title, f.White);
             ui.Text(Media.Artist, new RectangleF(tx, art.Y + 36 * S, tw, 20 * S), f.Body, f.Dim);
             ui.Text(Media.AppName, new RectangleF(tx, art.Bottom - 22 * S, tw, 18 * S), f.Small, f.Faint);
+            OutputPill(ui, tx + Math.Min(tw * 0.45f, ui.G.MeasureString(Media.AppName ?? "", f.Small).Width + 8 * S), art.Bottom - 23 * S, tx + tw, f);
             float y = art.Bottom + 14 * S;
             if (Media.Duration > TimeSpan.Zero) { view.Progress(ui, this, c.X, y, lw, f.Small); y += 34 * S; }
             view.Controls(ui, this, c.X + lw / 2, y + 22 * S, 0.82f);
@@ -770,7 +772,8 @@ namespace Harbor
             }
 
             var ids = new List<string>(); var glyphs = new List<string>(); var ons = new List<bool>(); var acts = new List<Action>();
-            ids.Add("qdark"); glyphs.Add(""); ons.Add(Theme.UserDark); acts.Add(ControlCenter.ToggleDarkMode);
+            ids.Add("qfocus"); glyphs.Add("\uE708"); ons.Add(FocusMode.On); acts.Add(FocusMode.Toggle);
+            ids.Add("qdark"); glyphs.Add("\uE793"); ons.Add(Theme.UserDark); acts.Add(ControlCenter.ToggleDarkMode);
             if (Radios.HasWifi) { ids.Add("qwifi"); glyphs.Add(""); ons.Add(Radios.WifiOn); acts.Add(() => Radios.SetWifi(!Radios.WifiOn)); }
             if (Radios.HasBt) { ids.Add("qbt"); glyphs.Add(""); ons.Add(Radios.BtOn); acts.Add(() => Radios.SetBluetooth(!Radios.BtOn)); }
             ids.Add("qawake"); glyphs.Add(""); ons.Add(keepAwake); acts.Add(ToggleKeepAwake);

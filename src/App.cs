@@ -140,6 +140,7 @@ namespace Harbor
             ScreenTime.Init();
             Reminders.Init();
             ClipboardHistory.Init();
+            Updates.Init();
             ClaudeBridge.Start();
             ClaudeBridge.EnsureHooks(Application.ExecutablePath); // e.g. a new editor or account profile since last time
             ClaudeBridge.Asked += Island.Attention;
@@ -361,6 +362,13 @@ namespace Harbor
         }
 
         public static void RebuildDocks() { foreach (var d in Displays) d.Dock.Rebuild(); }
+
+        /// <summary>Focus switched on or off: the dock may tuck away (or come back), the bar shows it.</summary>
+        public static void OnFocusChanged()
+        {
+            foreach (var d in Displays) { ApplyDock(d); d.Bar.RenderBar(); }
+            ScheduleRelayoutAfter(300);
+        }
 
         /// <summary>"Hide Dock While Using This App" rules.</summary>
         public static void ApplyDockRules()
@@ -819,6 +827,7 @@ namespace Harbor
             ClaudeHistory.UseDemo();
             ClaudeUsage.UseDemo();
             ClipboardHistory.UseDemo();
+            AudioOutputs.Demo = true;
             Shelf.UseDemo();
             ClaudeBridge.UseDemo();
             foreach (var d in Displays) d.Bar.RenderBar();
@@ -897,6 +906,16 @@ namespace Harbor
             if (ht >= 0 && ht + 2 < args.Length) { ClaudeBridge.SetHooks(args[ht + 2] == "on", Application.ExecutablePath, args[ht + 1]); return; }
             int wt = Array.IndexOf(args, "--weather-test");
             if (wt >= 0 && wt + 2 < args.Length) { Weather.Test(args[wt + 1], args[wt + 2]); return; }
+            int ot = Array.IndexOf(args, "--outputs-test");
+            if (ot >= 0 && ot + 1 < args.Length)
+            {
+                var sb = new System.Text.StringBuilder();
+                foreach (var o in AudioOutputs.List()) sb.AppendLine((o.Default ? "* " : "  ") + o.Name);
+                File.WriteAllText(args[ot + 1], sb.Length == 0 ? "(no outputs)" : sb.ToString());
+                return;
+            }
+            int ut = Array.IndexOf(args, "--update-test");
+            if (ut >= 0 && ut + 2 < args.Length) { Updates.Test(args[ut + 1], args[ut + 2]); return; }
             int lt = Array.IndexOf(args, "--lyrics-test");
             if (lt >= 0 && lt + 3 < args.Length)
             {

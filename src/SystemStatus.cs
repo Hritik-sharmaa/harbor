@@ -59,7 +59,7 @@ namespace Harbor
         static IMMDevice device;
         public static string DeviceName = "";
 
-        static string ReadName(IMMDevice dev)
+        internal static string ReadName(IMMDevice dev)
         {
             IPropertyStore ps = null;
             try

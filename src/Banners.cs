@@ -229,7 +229,9 @@ namespace Harbor
                         string aumid = null;
                         try { aumid = n.AppInfo.AppUserModelId; } catch { }
                         HideWindowsBanner(aumid, hidden); // a new app: Windows showed this one, Harbor shows the next
-                        if (!Quiet() && (aumid == null || !KeepWindowsBanner(aumid))) Show(n, aumid);
+                        if (aumid != null && KeepWindowsBanner(aumid)) { }
+                        else if (FocusMode.On) FocusMode.Held(); // still in the Notification Center
+                        else if (!Quiet()) Show(n, aumid);
                     }
                     if (hidden.Count != before) SaveHiddenList(hidden);
                 });
@@ -267,6 +269,7 @@ namespace Harbor
         public static void ShowLocal(string app, string title, string body)
         {
             var d = App.PrimaryDisplay;
+            if (FocusMode.On) { FocusMode.Held(); return; }
             if (d == null || Quiet()) return;
             while (shown.Count >= MaxShown) shown[shown.Count - 1].Dismiss();
             var f = new BannerForm(d, 0, null, app, title, body ?? "");

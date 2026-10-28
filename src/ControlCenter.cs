@@ -169,10 +169,10 @@ namespace Harbor
             // row 2: focus (2x1) + two round buttons
             var focus = CellRect(y, 0, 2, Cell);
             Module(ui, focus, Hover == "focus", 22 * S);
-            ui.AddHit("focus", focus, () => N.SendWinKey((byte)'N'));
-            Circle(ui, "focusc", new PointF(focus.X + 30 * S, focus.Y + focus.Height / 2), 16 * S, false, "", null);
+            ui.AddHit("focus", focus, FocusMode.Toggle, true);
+            Circle(ui, "focusc", new PointF(focus.X + 30 * S, focus.Y + focus.Height / 2), 16 * S, FocusMode.On, "", null);
             ui.Text("Focus", new RectangleF(focus.X + 56 * S, focus.Y + focus.Height / 2 - 16 * S, focus.Width - 62 * S, 17 * S), ui.Bold, ui.TextBrush);
-            ui.Text("Notifications", new RectangleF(focus.X + 56 * S, focus.Y + focus.Height / 2 + 1 * S, focus.Width - 62 * S, 15 * S), ui.Small, ui.DimBrush);
+            ui.Text(FocusMode.On ? (FocusMode.Left != null ? "On · " + FocusMode.LeftText() + " left" : "On") : "Off", new RectangleF(focus.X + 56 * S, focus.Y + focus.Height / 2 + 1 * S, focus.Width - 62 * S, 15 * S), ui.Small, ui.DimBrush);
             RoundModule(ui, "dark", CellRect(y, 2, 1, Cell), "\uE793", ToggleDarkMode, Theme.UserDark);
             RoundModule(ui, "cast", CellRect(y, 3, 1, Cell), "", () => N.SendWinKey((byte)'K'));
             y += Cell * S + Gap * S;

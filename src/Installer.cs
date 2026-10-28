@@ -41,8 +41,10 @@ namespace Harbor
             string exe = Path.Combine(dst, "Harbor.exe");
 
             CreateShortcut(ShortcutPath, exe);
-            // remember where builds come from so "Check for Updates" can find newer ones
-            if (!string.Equals(Path.GetFullPath(src).TrimEnd('\\'), Path.GetFullPath(dst).TrimEnd('\\'), StringComparison.OrdinalIgnoreCase))
+            // remember where local builds come from so the About page can offer newer ones
+            // (not for an in-app update, which installs from a temporary folder)
+            bool fromTemp = Path.GetFullPath(src).StartsWith(Path.GetFullPath(Path.GetTempPath()), StringComparison.OrdinalIgnoreCase);
+            if (!fromTemp && !string.Equals(Path.GetFullPath(src).TrimEnd('\\'), Path.GetFullPath(dst).TrimEnd('\\'), StringComparison.OrdinalIgnoreCase))
                 using (var k = Registry.CurrentUser.CreateSubKey(@"Software\Harbor")) k.SetValue("UpdateSource", src);
             using (var k = Registry.CurrentUser.CreateSubKey(UninstallKey))
             {

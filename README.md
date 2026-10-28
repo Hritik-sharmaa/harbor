@@ -96,7 +96,7 @@ Rest the mouse on the centre of the menu bar and a dark panel drops down, like a
 
 | Tab | What's in it |
 | --- | --- |
-| **Dashboard** | Reminders, your most-used apps today, quick toggles (dark mode, Wi‑Fi, Bluetooth, keep awake, screenshot, lock), Pomodoro, day progress and weather |
+| **Dashboard** | Reminders, your most-used apps today, quick toggles (Focus, dark mode, Wi‑Fi, Bluetooth, keep awake, screenshot, lock), Pomodoro, day progress and weather |
 | **Media** | Cover, seek bar and controls, with synced lyrics beside them |
 | **Pomodoro** | Ring timer with Work / Short break / Long break, sessions today, a focus target (one of your reminders) and day progress. While it runs, the time shows in the centre of the menu bar |
 | **Weather** | Now, feels-like, humidity, wind, UV, rain chance, pressure and the next 12 hours, from [Open-Meteo](https://open-meteo.com) for the city you set |
@@ -210,12 +210,15 @@ bin\Harbor.exe --install
 
 ## Privacy
 
-Harbor has no telemetry, analytics or auto-download. **Check for Updates** just opens the Releases page in your browser.
+Harbor has no telemetry or analytics, and never installs anything you didn't click.
 
-Harbor only goes online for two things, and only while you're looking at them:
+Harbor goes online for three things:
 
+- **Updates:** once a day it asks GitHub's API for the list of Harbor releases. Nothing about you or your PC is sent. A new version is downloaded only when you click **Install**, from GitHub over HTTPS, and checked against GitHub's SHA-256 checksum before it's installed. Switch the daily check off in **Harbor → About**.
 - **Song lyrics:** while Now Playing or the island's Media tab is open, it asks [LRCLIB](https://lrclib.net), a free and open lyrics service, for the current song by sending its title, artist, album and length. Turn this off with the **Lyrics** button or in **Harbor → General**.
 - **Weather:** if you set a city, it looks the city up once and then asks [Open-Meteo](https://open-meteo.com) (free, no account) for that city's forecast while the Weather tab or Dashboard is open, at most every 20 minutes. Only the city name and its coordinates are sent.
+
+Lyrics and weather are only fetched while you're looking at them.
 
 Everything else stays on your PC:
 

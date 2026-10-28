@@ -21,6 +21,15 @@ namespace Harbor
             inst.Open(Screen.PrimaryScreen.WorkingArea, false, 1, d != null ? d.Scale : 1f, null);
         }
 
+        /// <summary>Opens the app on its About page (updates live there).</summary>
+        public static void ShowAbout()
+        {
+            if (inst == null) inst = new SettingsWindow();
+            inst.page = 6;
+            ShowWindow();
+            inst.Refresh2();
+        }
+
         static readonly string[] pages = { "General", "Dock", "Menu Bar", "Appearance", "Themes", "Pinned Apps", "About" };
         static readonly string[] pageGlyphs = { "\uE9E9", "\uEBC6", "\uE7F4", "\uE706", "\uE790", "\uE718", "\uE946" };
         int page;
@@ -39,6 +48,7 @@ namespace Harbor
             Text = "Harbor";
             ShowInTaskbar = true;
             try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { }
+            Updates.Changed += delegate { if (Visible && page == 6) Refresh2(); };
         }
 
         protected override void OnOpened()
@@ -171,7 +181,7 @@ namespace Harbor
             cardTop = -1;
         }
 
-        public const string Version = "0.2.3";
+        public const string Version = "0.2.4";
         public const string RepoUrl = "https://github.com/hritik-sharmaa/harbor";
         static readonly string[] pageInfo =
         {
@@ -318,6 +328,14 @@ namespace Harbor
                 ui.ToggleRow("stime", "Screen Time", Look.Bool("ScreenTime"), v => { Look.Set("ScreenTime", v); Settings.Save(); if (v) ScreenTime.Init(); }, "Time per app, counted and kept on this PC only");
                 ui.ToggleRow("cliph", "Clipboard history", Look.Bool("ClipboardHistory"), v => { Look.Set("ClipboardHistory", v); Settings.Save(); ClipboardHistory.Init(); }, "Your last 30 copies and screenshots. Kept in memory and cleared when Harbor quits; password managers' copies are skipped");
             }
+
+            Card(ui, "Focus");
+            ui.ToggleRow("focuson", "Focus now", FocusMode.On, v => { if (v) FocusMode.Start(); else FocusMode.Stop(); Refresh2(); },
+                "Banners stay quiet (notifications still collect in the Notification Center). Also in Control Center, the Dashboard and the Harbor menu");
+            ui.ToggleRow("focuspomo", "Start a Pomodoro work session", Look.Bool("FocusPomodoro"), v => { Look.Set("FocusPomodoro", v); Settings.Save(); },
+                "Focus ends by itself when the session does; otherwise it stays on until you end it");
+            ui.ToggleRow("focusdock", "Tuck the dock away", Look.Bool("FocusHideDock"), v => { Look.Set("FocusHideDock", v); Settings.Save(); if (FocusMode.On) App.OnFocusChanged(); },
+                "It comes back when you move the mouse to the screen edge");
 
             Card(ui, "Claude Code");
             ui.ToggleRow("claudehook", "Live sessions and Allow / Deny in the island", ClaudeBridge.HooksOn, v =>
@@ -719,9 +737,29 @@ namespace Harbor
             ui.Item("issue", "Report a Problem or Suggest a Feature", () => Launcher.Run(RepoUrl + "/issues/new"), "\uE939", keep: true, chevron: true);
             string newer = Installer.NewerBuild();
             if (newer != null)
-                ui.Item("upd", "Install Update", () => Launcher.Run(newer, "--install"), "\uE896", sub: "Newer build from " + File.GetLastWriteTime(newer).ToString("d MMM, HH:mm"), accent: true, circle: true);
+                ui.Item("updlocal", "Install Local Build", () => Launcher.Run(newer, "--install"), "\uE896", sub: "Newer build from " + File.GetLastWriteTime(newer).ToString("d MMM, HH:mm"), keep: true);
+
+            Card(ui, "Updates");
+            var rel = Updates.Available;
+            if (rel != null)
+            {
+                string sub = Updates.Percent == 0 ? "Connecting to GitHub\u2026" : Updates.Percent > 0 ? "Downloading\u2026 " + Updates.Percent + "%" : Updates.Busy ? Updates.Status : (Updates.Status ?? "Downloads from GitHub, checks it, and restarts Harbor");
+                ui.Item("upd", Updates.Busy ? "Updating to Harbor " + rel.Version : "Install Harbor " + rel.Version, () => { if (!Updates.Busy) Updates.Install(); }, "\uE896", sub: sub, accent: true, circle: true, keep: true);
+                if (!string.IsNullOrEmpty(rel.Notes))
+                {
+                    string notes = rel.Notes.Length > 420 ? rel.Notes.Substring(0, 420).TrimEnd() + "\u2026" : rel.Notes;
+                    float nw = ui.Right - ui.Pad - 20 * S;
+                    ui.Text("What's new in " + rel.Version, new RectangleF(ui.Pad + 10 * S, ui.Y + 4 * S, nw, 18 * S), ui.Bold, ui.TextBrush);
+                    var size = ui.G.MeasureString(notes, ui.Small, (int)nw);
+                    ui.G.DrawString(notes, ui.Small, ui.DimBrush, new RectangleF(ui.Pad + 10 * S, ui.Y + 26 * S, nw, size.Height + 2));
+                    ui.Y += size.Height + 36 * S;
+                }
+                if (rel.Page != null) ui.Item("updnotes", "Release Notes on GitHub", () => Launcher.Run(rel.Page), "\uE8A7", keep: true, chevron: true);
+            }
             else
-                ui.Item("upd", "Check for Updates", () => Launcher.Run(RepoUrl + "/releases"), "\uE895", sub: "Latest releases on GitHub", keep: true, chevron: true);
+                ui.Item("upd", "Check for Updates", () => Updates.Check(true), "\uE895", sub: Updates.Status ?? "Version " + Version + " \u00B7 asks GitHub for newer releases", keep: true);
+            ui.ToggleRow("updauto", "Check for updates automatically", Look.Bool("UpdateCheck"), v => { Look.Set("UpdateCheck", v); Settings.Save(); },
+                "Once a day Harbor asks GitHub for the list of releases (nothing about you is sent). Updates install only when you click.");
 
             Card(ui, "Harbor");
             ui.Item("cfg", "Open Settings File", () => Launcher.Run(Path.Combine(Settings.Dir, "settings.ini")), "\uE8A5", keep: true);

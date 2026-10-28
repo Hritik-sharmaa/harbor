@@ -11,7 +11,9 @@ namespace Harbor
         public static int IconSize = 40;
         public static bool Magnify = true;
         public static int MagnifyPercent = 150;
-        public static bool AutoHide = false;
+        static bool autoHide;
+        /// <summary>The "Automatically hide the dock" setting, also on while Focus tucks the dock away.</summary>
+        public static bool AutoHide { get { return autoHide || FocusMode.HidesDock; } set { autoHide = value; } }
         public static bool ShowRunning = true;
         public static bool ShowTopBar = true;
         public static bool HideTaskbar = true;
@@ -85,7 +87,7 @@ namespace Harbor
                     case "iconsize": IconSize = Clamp(ToInt(v, 40), 28, 96); break;
                     case "magnify": Magnify = v == "1"; break;
                     case "magnifypercent": MagnifyPercent = Clamp(ToInt(v, 150), 110, 250); break;
-                    case "autohide": AutoHide = v == "1"; break;
+                    case "autohide": autoHide = v == "1"; break;
                     case "showrunning": ShowRunning = v == "1"; break;
                     case "showtopbar": ShowTopBar = v == "1"; break;
                     case "hidetaskbar": HideTaskbar = v == "1"; break;
@@ -113,7 +115,7 @@ namespace Harbor
                 l.Add("IconSize=" + IconSize);
                 l.Add("Magnify=" + B(Magnify));
                 l.Add("MagnifyPercent=" + MagnifyPercent);
-                l.Add("AutoHide=" + B(AutoHide));
+                l.Add("AutoHide=" + B(autoHide));
                 l.Add("ShowRunning=" + B(ShowRunning));
                 l.Add("ShowTopBar=" + B(ShowTopBar));
                 l.Add("HideTaskbar=" + B(HideTaskbar));

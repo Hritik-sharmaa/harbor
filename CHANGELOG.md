@@ -1,5 +1,21 @@
 # Changelog
 
+## 0.2.4 — 2026-10-28 (preview)
+
+**New**
+- **Focus:** one switch for heads-down time, in Control Center, the Dashboard, the Harbor menu and **Harbor → General → Focus**. While it's on:
+  - Banners stay quiet; notifications still collect in the Notification Center, and when Focus ends Harbor tells you how many came in.
+  - A Pomodoro work session starts, and Focus ends with it.
+  - The dock tucks away until you move the mouse to the screen edge.
+  - A moon in the menu bar shows the minutes left; click it to end Focus. Both the Pomodoro and the dock behaviour can be switched off.
+- **In-app updates:** Harbor checks GitHub for a new release once a day and tells you when one is out. **Harbor → About** shows what's new; **Install** downloads it, checks it against GitHub's SHA-256 checksum, installs it and restarts Harbor. It's also in the Harbor menu (top left). Nothing about you is sent; switch the daily check off in **About**.
+- **Sound output switching:** the Sound panel lists your outputs (speakers, headphones, HDMI…) to switch between, and the notch's Media tab shows the current one; click it to move to the next. Shown only when you have more than one.
+- **Brightness from the menu bar:** scroll over the Control Center icon to change that screen's brightness, like scrolling over the volume icon.
+
+**Fixed**
+- **Claude Usage** could show another editor's account. VS Code, Antigravity and the CLI can each be signed in to a different Claude account, and Harbor used whichever had saved its numbers most recently. It now uses VS Code's numbers when VS Code has any.
+- **Claude Usage display:** a session that hasn't started says "Starts with your next message". Weekly resets read "Resets in 6d · Wed 00:29", like Claude's own dialog. The footer shows when the numbers were last updated.
+
 ## 0.2.3 — 2026-10-28 (preview)
 
 **New in the island**

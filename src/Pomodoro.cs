@@ -142,6 +142,7 @@ namespace Harbor
             {
                 int n = SessionsToday;
                 if (finished) { n++; Look.Set("PomoToday", DateTime.Today.ToString("yyyy-MM-dd") + "|" + n); Settings.Save(); }
+                if (finished) FocusMode.WorkSessionDone(); // a Pomodoro-linked Focus ends with the session
                 Current = n > 0 && n % 4 == 0 && finished ? Phase.LongBreak : Phase.ShortBreak;
             }
             else Current = Phase.Work;

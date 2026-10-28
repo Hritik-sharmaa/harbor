@@ -103,7 +103,10 @@ namespace Harbor
                 }
                 if (r == null) continue;
                 var at = (DateTime)r[0];
-                if (bestAt == null || at > bestAt.Value) { bestAt = at; best = (List<Limit>)r[1]; bestFrom = EditorName(dir); }
+                // each editor can be signed in to a different Claude account: VS Code's numbers win when it has any,
+                // otherwise the most recently checked ones
+                bool vscode = EditorName(dir) == "VS Code";
+                if (bestFrom != "VS Code" && (vscode || bestAt == null || at > bestAt.Value)) { bestAt = at; best = (List<Limit>)r[1]; bestFrom = EditorName(dir); }
             }
         }
 

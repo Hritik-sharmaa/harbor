@@ -164,6 +164,28 @@ namespace Harbor
             return s.Replace("\r\n", "\n").Replace('\t', ' ');
         }
 
+        // ------------------------------------------------------------------ media: where the sound plays
+
+        List<AudioOutputs.Device> outputs;
+        int outputsAt;
+
+        /// <summary>A small pill with the sound output (speakers, headphones...); click it to switch to the next one.</summary>
+        void OutputPill(UI ui, float x, float y, float right, Fonts2 f)
+        {
+            // listed at most every few seconds while the Media tab is drawn (it redraws often while music plays)
+            if (outputs == null || unchecked(Environment.TickCount - outputsAt) > 5000) { outputs = AudioOutputs.List(); outputsAt = Environment.TickCount; }
+            var cur = outputs.Find(d => d.Default);
+            if (cur == null || outputs.Count < 2) return; // nothing to switch to
+            float w = Math.Min(right - x, PillWidth(ui, cur.Name, f.Small) + 18 * S);
+            if (w < 60 * S) return;
+            var r = new RectangleF(x, y, w, 20 * S);
+            ui.Fill(r, Color.FromArgb(Hover == "mout" ? 54 : 26, 255, 255, 255), r.Height / 2);
+            using (var gf = new Font(Fonts.Icons, 9.5f * S, GraphicsUnit.Pixel)) ui.Glyph("", new RectangleF(r.X + 4 * S, r.Y, 18 * S, r.Height), gf, f.Dim);
+            using (var sf = new StringFormat { LineAlignment = StringAlignment.Center, Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap })
+                ui.G.DrawString(cur.Name, f.Small, Hover == "mout" ? f.White : f.Dim, new RectangleF(r.X + 22 * S, r.Y, r.Width - 28 * S, r.Height), sf);
+            ui.AddHit("mout", r, () => { AudioOutputs.Next(); outputs = null; }, true);
+        }
+
         // ------------------------------------------------------------------ clipboard
 
         int clipFirst, clipFilter;
@@ -398,14 +420,17 @@ namespace Harbor
                 var bar = new RectangleF(c.X, y + 24 * S, lw, 6 * S);
                 ui.Fill(bar, Color.FromArgb(34, 255, 255, 255), 3 * S);
                 if (pct > 0) ui.Fill(new RectangleF(bar.X, bar.Y, Math.Max(bar.Height, bar.Width * pct / 100f), bar.Height), col, 3 * S);
-                string sub = !l.Resets.HasValue ? "" : (reset ? "Reset " : "Resets ") + When(l.Resets.Value);
+                string sub = !l.Resets.HasValue ? (pct == 0 ? "Starts with your next message" : "")
+                    : reset ? "Reset " + When(l.Resets.Value) + " · run /usage for new numbers" : "Resets " + When(l.Resets.Value);
                 ui.Text(sub, new RectangleF(c.X, y + 32 * S, lw, 18 * S), f.Small, f.Faint);
                 y += 58 * S;
             }
             if (ClaudeUsage.LimitsAt.HasValue)
                 {
-                bool stale = limits.Exists(l => l.Resets.HasValue && l.Resets.Value <= now);
-                ui.Text("From " + ClaudeUsage.LimitsFrom + " · checked " + Ago(ClaudeUsage.LimitsAt.Value) + (stale ? " · /usage in Claude Code updates it" : ""), new RectangleF(c.X, c.Bottom - 18 * S, lw + 20 * S, 18 * S), f.Small, f.Faint);
+                var at = ClaudeUsage.LimitsAt.Value;
+                string when = at.Date == DateTime.Today ? at.ToString("t", CultureInfo.CurrentCulture)
+                    : at.Date == DateTime.Today.AddDays(-1) ? "yesterday " + at.ToString("t", CultureInfo.CurrentCulture) : at.ToString("d MMM", CultureInfo.CurrentCulture);
+                ui.Text(ClaudeUsage.LimitsFrom + " · updated " + when, new RectangleF(c.X, c.Bottom - 18 * S, lw, 18 * S), f.Small, f.Faint);
             }
 
             // the last 7 days on this PC, from the transcripts
@@ -461,7 +486,7 @@ namespace Harbor
             string clock = t.ToString("t", CultureInfo.CurrentCulture);
             if (d.TotalSeconds <= 0) return t.Date == DateTime.Today ? "at " + clock : t.ToString("ddd", CultureInfo.CurrentCulture) + " " + clock;
             if (d.TotalHours < 24) return "in " + Span(d);
-            return t.ToString("ddd", CultureInfo.CurrentCulture) + " " + clock;
+            return "in " + (int)Math.Round(d.TotalDays) + "d · " + t.ToString("ddd", CultureInfo.CurrentCulture) + " " + clock; // like Claude's own "Resets in 6d"
         }
     }
 }

@@ -346,7 +346,7 @@ namespace Harbor
                 float rx1 = W - edge;
                 float xr = rx1 - ip;
                 Zone cc = null, bat = null, wifi = null, vol = null, tray = null;
-                if (Look.Bool("BarShowCC")) { cc = AddZone("cc", xr - iw, iw, z => ControlCenter.Toggle(this, z.R), () => "Control Center"); xr -= iw; }
+                if (Look.Bool("BarShowCC")) { cc = AddZone("cc", xr - iw, iw, z => ControlCenter.Toggle(this, z.R), BrightnessTip); xr -= iw; }
                 bool clockRight = !IslandStyle;
                 string clock = Look.Bool("BarShowClock") ? ClockText() : null;
                 Zone clk = null;
@@ -390,6 +390,16 @@ namespace Harbor
                     float hw = 30 * S + Measure(g, "100%", small);
                     hp = AddZone("hp", xr - hw, hw, z => BluetoothFlyout.Toggle(this, z.R), () => BtBattery.ConnectedName + "  ·  battery " + BtBattery.ConnectedLevel + "%");
                     xr -= hw;
+                }
+                // Focus: a moon (and the minutes left, when it ends with a Pomodoro session); click to end it
+                Zone fz = null;
+                string focusLeft = FocusMode.On ? FocusMode.LeftText() : null;
+                if (FocusMode.On)
+                {
+                    float fw = 28 * S + (focusLeft != "" ? Measure(g, focusLeft, small) + 2 * S : 0);
+                    fz = AddZone("focus", xr - fw, fw, z => FocusMode.Stop(),
+                        () => "Focus is on" + (FocusMode.Left != null ? " until this work session ends" : "") + "  ·  click to end");
+                    xr -= fw;
                 }
                 // widgets: CPU / RAM / network / keyboard / mic & camera
                 var widgetZones = new List<KeyValuePair<Zone, string>>();
@@ -570,6 +580,11 @@ namespace Harbor
                     DrawGlyph(g, "\uE7F6", iconFont, brush, new RectangleF(hp.R.X + 2 * S, iy + 0.5f * S, 22 * S, ih), sf);
                     Color hc = BtBattery.ConnectedLevel <= 20 ? Color.FromArgb(255, 255, 69, 58) : text;
                     using (var hb = new SolidBrush(hc)) g.DrawString(BtBattery.ConnectedLevel + "%", small, hb, new RectangleF(hp.R.X + 24 * S, iy + 0.5f * S, hp.R.Width - 24 * S, ih), lf);
+                }
+                if (fz != null)
+                {
+                    DrawGlyph(g, "", iconFont, brush, new RectangleF(fz.R.X + 3 * S, iy + 0.5f * S, 22 * S, ih), sf);
+                    if (focusLeft != "") g.DrawString(focusLeft, small, brush, new RectangleF(fz.R.X + 26 * S, iy + 0.5f * S, fz.R.Width - 26 * S, ih), lf);
                 }
                 if (sys != null) DrawSystem(g, sys.R, iy, ih, small, text);
                 if (tray != null)
@@ -907,10 +922,51 @@ namespace Harbor
         protected override void OnMouseWheel(MouseEventArgs e)
         {
             var z = ZoneAt(e.Location);
-            if (z == null || z.Id != "vol") return;
+            if (z == null) return;
+            if (z.Id == "cc") { ScrollBrightness(e.Delta > 0 ? 5 : -5); return; }
+            if (z.Id != "vol") return;
             Volume.Set((Volume.Muted ? 0 : Volume.Level) + (e.Delta > 0 ? 0.04f : -0.04f));
             RenderBar();
             if (hoverId == "vol") { tipTimer.Stop(); ShowTip(); }
+        }
+
+        // ---- scrolling over the Control Center icon changes this screen's brightness
+        Brightness bri;
+        int briPending;
+        DateTime briUsed;
+
+        void ScrollBrightness(int delta)
+        {
+            // monitors get new handles after sleep: look the screen up again after a quiet minute
+            if (bri != null && (DateTime.Now - briUsed).TotalSeconds > 60 && bri.Value >= 0) bri = null;
+            briUsed = DateTime.Now;
+            if (bri == null)
+            {
+                var b = bri = new Brightness(Disp.HMon, Disp.Name);
+                briPending = delta;
+                Brightness.LoadAll(new List<Brightness> { b }, () =>
+                {
+                    if (b != bri) return;
+                    if (b.Value >= 0) b.Set(b.Value + briPending);
+                    briPending = 0;
+                    BrightnessChanged();
+                });
+                return;
+            }
+            if (bri.Value < 0) { briPending += delta; return; } // still reading the screen
+            bri.Set(bri.Value + delta);
+            BrightnessChanged();
+        }
+
+        void BrightnessChanged()
+        {
+            if (hoverId == "cc") { tipTimer.Stop(); ShowTip(); }
+        }
+
+        string BrightnessTip()
+        {
+            return bri != null && bri.Value >= 0 && (DateTime.Now - briUsed).TotalSeconds < 5
+                ? "Brightness " + bri.Value + "%  ·  scroll to adjust" : "Control Center  ·  scroll for brightness";
         }
 
         void ShowTip()
@@ -973,7 +1029,9 @@ namespace Harbor
             m.Add("Lock Screen\tWin L", () => N.LockWorkStation());
             m.Add("Log Out " + PopMenu.Escape(Environment.UserName) + "…", () => { if (Confirm("Are you sure you want to sign out? Unsaved work may be lost.")) Launcher.Run("shutdown.exe", "/l"); });
             m.Sep();
+            m.Add(FocusMode.On ? "End Focus" : "Focus", FocusMode.Toggle, FocusMode.On);
             m.Add("Harbor Settings…", SettingsWindow.ShowWindow);
+            if (Updates.Available != null) m.Add("Update Harbor to " + Updates.Available.Version + "…", SettingsWindow.ShowAbout);
             m.ShowBelow(this, z.R, z.Id);
         }
 
