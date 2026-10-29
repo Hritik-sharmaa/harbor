@@ -16,9 +16,11 @@ namespace Harbor
     {
         static Island inst;
 
-        static readonly string[] tabs = { "dashboard", "media", "pomodoro", "weather", "screentime", "reminders", "clipboard", "shelf", "ai", "usage" };
-        static readonly string[] tabNames = { "Dashboard", "Media", "Pomodoro", "Weather", "Screen Time", "Reminders", "Clipboard", "Shelf", "AI Coding", "Claude Usage" };
-        static readonly string[] tabGlyphs = { "", "", "", null, "", "", "\uE77F", "\uE7B8", "", "\uE9D9" }; // weather draws its own icon
+        // every tab the island has, in the default order; Harbor → General → Notch tabs picks which show and in what order
+        static readonly string[] allTabs = { "dashboard", "media", "calendar", "pomodoro", "timers", "weather", "screentime", "reminders", "notes", "clipboard", "shelf", "downloads", "ai", "usage" };
+        static readonly string[] allNames = { "Dashboard", "Media", "Calendar", "Pomodoro", "Timers", "Weather", "Screen Time", "Reminders", "Notes", "Clipboard", "Shelf", "Downloads", "AI Coding", "Claude Usage" };
+        static readonly string[] allGlyphs = { "", "", "", "", "", null, "", "", "", "", "", "", "", "" }; // weather draws its own icon
+        static string[] tabs { get { return ShownTabs().ToArray(); } }
 
         string tab;
         RectangleF trigger;                 // the menu-bar area that opened us (screen coordinates)
@@ -36,7 +38,8 @@ namespace Harbor
             NoActivate = true;
             LogicalWidth = 680;
             FixedLogicalHeight = 284;
-            tab = Array.IndexOf(tabs, Look.Get("IslandTab")) >= 0 ? Look.Get("IslandTab") : "media";
+            var shown = tabs;
+            tab = Array.IndexOf(shown, Look.Get("IslandTab")) >= 0 ? Look.Get("IslandTab") : (shown.Length > 0 ? shown[0] : "media");
             Media.Changed += delegate { if (Visible && tab == "media") Refresh2(); };
             Lyrics.Changed += delegate { view.Snap(); if (Visible && tab == "media") Refresh2(); };
             Pomodoro.Changed += delegate { if (Visible && tab == "pomodoro") Refresh2(); };
@@ -48,6 +51,11 @@ namespace Harbor
             Shelf.Changed += delegate { if (Visible && tab == "shelf") Refresh2(); };
             ClaudeUsage.Changed += delegate { if (Visible && tab == "usage") Refresh2(); };
             FocusMode.Changed += delegate { if (Visible) Refresh2(); };
+            Timers.Changed += delegate { if (Visible && (tab == "timers" || tab == "dashboard")) Refresh2(); };
+            CalendarFeed.Changed += delegate { if (Visible && (tab == "calendar" || tab == "dashboard")) Refresh2(); };
+            Notes.Changed += delegate { if (Visible && tab == "notes") Refresh2(); };
+            Downloads.Changed += delegate { if (Visible && tab == "downloads") Refresh2(); };
+            LastPlayed.Changed += delegate { if (Visible && tab == "media") Refresh2(); };
             AllowDrop = true; // files dropped on the notch go on the shelf
             tick.Tick += delegate { Tick(); };
             shapeAnim.Tick += delegate { AnimateShape(); };
@@ -81,7 +89,8 @@ namespace Harbor
 
         void SetTab(string t, bool remember)
         {
-            if (Array.IndexOf(tabs, t) < 0 || t == tab) return;
+            // any tab can be opened for something (a dropped file, Claude asking) even if it's hidden from the bar
+            if (Array.IndexOf(allTabs, t) < 0 || t == tab) return;
             tab = t;
             Media.WantTimeline = t == "media";
             if (t == "media") { Media.RefreshTimeline(); view.Snap(); }
@@ -109,6 +118,7 @@ namespace Harbor
             tick.Stop();
             watch.Stop();
             Media.WantTimeline = false;
+            byKeyboard = false;
             foreach (var b in icons.Values) if (b != null) b.Dispose();
             icons.Clear();
         }
@@ -120,7 +130,7 @@ namespace Harbor
             var p = Cursor.Position;
             var me = new RectangleF(Left, Top - 8, Width, Height + 8);
             // stay while you're over it, typing a reminder, or Claude is waiting for your answer
-            if (me.Contains(p) || RectangleF.Inflate(trigger, 6, 0).Contains(p) || Dragging != null || dragOut || StillDropping() || FocusField != null || ClaudeBridge.Pending.Count > 0) { outsideMs = 0; return; }
+            if (me.Contains(p) || RectangleF.Inflate(trigger, 6, 0).Contains(p) || Dragging != null || dragOut || byKeyboard || StillDropping() || FocusField != null || ClaudeBridge.Pending.Count > 0) { outsideMs = 0; return; }
             outsideMs += watch.Interval;
             if (outsideMs >= 400) Shrink();
         }
@@ -133,7 +143,8 @@ namespace Harbor
             bool need = Dragging != null
                 || (tab == "media" && (view.Animating || (Media.Playing && age > 250)))
                 || ((tab == "pomodoro" || tab == "dashboard" || tab == "ai") && age > 1000)
-                || ((tab == "screentime" || tab == "usage") && age > 15000);
+                || (tab == "downloads" && DownloadsMoving(now))
+                || ((tab == "screentime" || tab == "usage" || tab == "calendar" || tab == "timers") && age > 15000);
             if (need) { lastFrame = now; Refresh2(); }
         }
 
@@ -282,6 +293,10 @@ namespace Harbor
                     case "clipboard": ClipboardTab(ui, c, f); break;
                     case "shelf": ShelfTab(ui, c, f); break;
                     case "usage": UsageTab(ui, c, f); break;
+                    case "calendar": CalendarTab(ui, c, f); break;
+                    case "timers": TimersTab(ui, c, f); break;
+                    case "notes": NotesTab(ui, c, f); break;
+                    case "downloads": DownloadsTab(ui, c, f); break;
                 }
                 TabBar(ui, new RectangleF(0, H - TabBarH * S, W, TabBarH * S), f);
             }
@@ -310,13 +325,14 @@ namespace Harbor
 
         void TabBar(UI ui, RectangleF r, Fonts2 f)
         {
-            // a pill per tab; the selected one also shows its name
-            float h = 30 * S, gap = 6 * S, icon = 34 * S;
+            // a pill per tab; the selected one also shows its name (tighter when you've kept lots of tabs)
+            var tabs = Island.tabs;
+            float h = 30 * S, gap = (tabs.Length > 11 ? 3 : 6) * S, icon = (tabs.Length > 11 ? 30 : 34) * S;
             var widths = new float[tabs.Length];
             float total = 0;
             for (int i = 0; i < tabs.Length; i++)
             {
-                widths[i] = tabs[i] == tab ? icon + ui.G.MeasureString(tabNames[i], f.Bold).Width + 6 * S : icon;
+                widths[i] = tabs[i] == tab ? icon + ui.G.MeasureString(NameOf(tabs[i]), f.Bold).Width + 6 * S : icon;
                 total += widths[i] + (i > 0 ? gap : 0);
             }
             float x = r.X + (r.Width - total) / 2, y = r.Y + (r.Height - h) / 2 - 2 * S;
@@ -332,9 +348,10 @@ namespace Harbor
                     if (sel) GlassShape(ui, pr, h / 2, 30, 30);
                     else if (Hover == id) ui.Fill(pr, Color.FromArgb(22, 255, 255, 255), h / 2);
                     var ir = new RectangleF(pr.X, pr.Y, icon, h);
-                    if (tabGlyphs[i] != null) ui.Glyph(tabGlyphs[i], ir, gf, sel ? f.White : f.Dim);
+                    string glyph = GlyphOf(tabs[i]);
+                    if (glyph != null) ui.Glyph(glyph, ir, gf, sel ? f.White : f.Dim);
                     else WeatherIcons.Draw(ui.G, RectangleF.Inflate(ir, -8 * S, -6 * S), Weather.Now != null ? Weather.Now.Code : 2, Weather.Now == null || Weather.Now.Day);
-                    if (sel) ui.Text(tabNames[i], new RectangleF(pr.X + icon - 4 * S, pr.Y, pr.Width - icon, h), f.Bold, f.White);
+                    if (sel) ui.Text(NameOf(tabs[i]), new RectangleF(pr.X + icon - 4 * S, pr.Y, pr.Width - icon, h), f.Bold, f.White);
                     string t = tabs[i];
                     ui.AddHit(id, pr, () => SetTab(t, true), true);
                     x += widths[i] + gap;
@@ -356,6 +373,7 @@ namespace Harbor
         void MediaTab(UI ui, RectangleF c, Fonts2 f)
         {
             view.NoteSong();
+            if (!Media.Has && LastPlayed.Has) { LastPlayedCard(ui, c, f); return; }
             if (!Media.Has)
             {
                 ui.Text("Nothing playing", new RectangleF(c.X, c.Y + c.Height / 2 - 26 * S, c.Width, 24 * S), f.Title, f.White, 1);
@@ -688,15 +706,20 @@ namespace Harbor
             // ---- up next (reminders)
             Caption(ui, up, ip, "UP NEXT", f);
             var open = Reminders.Open();
-            if (open.Count == 0)
+            // the next meeting today comes first, with Join
+            var meet = CalendarFeed.Next();
+            if (meet != null && meet.Start.Date != now.Date) meet = null;
+            int maxRem = meet != null ? 2 : 3;
+            if (meet != null) UpNextMeeting(ui, new RectangleF(up.X + ip, up.Y + 36 * S, cw - 2 * ip, 21 * S), meet, f);
+            if (open.Count == 0 && meet == null)
             {
                 using (var gf = new Font(Fonts.Icons, 15f * S, GraphicsUnit.Pixel))
                 using (var gb = new SolidBrush(Color.FromArgb(255, 48, 209, 88)))
                     ui.Glyph("", new RectangleF(up.X + ip - 2 * S, up.Y + 38 * S, 22 * S, 26 * S), gf, gb);
                 ui.Text("All caught up", new RectangleF(up.X + ip + 24 * S, up.Y + 38 * S, cw - 2 * ip - 24 * S, 26 * S), f.Title, f.White);
             }
-            float y = up.Y + 36 * S;
-            for (int i = 0; i < open.Count && i < 3; i++)
+            float y = up.Y + 36 * S + (meet != null ? 25 * S : 0);
+            for (int i = 0; i < open.Count && i < maxRem; i++)
             {
                 var it = open[i];
                 string id = "dr" + it.Id;
@@ -715,7 +738,7 @@ namespace Harbor
             if (Hover == "dadd") ui.Fill(add, Color.FromArgb(22, 255, 255, 255), 11 * S);
             ui.Text("+  Add reminder", new RectangleF(add.X + 6 * S, add.Y, add.Width, add.Height), f.Small, Hover == "dadd" ? f.White : f.Faint);
             ui.AddHit("dadd", add, () => { SetTab("reminders", false); FocusField = "rem"; Activate(); N.SetForegroundWindow(Handle); }, true);
-            if (open.Count > 3) ui.Text("+" + (open.Count - 3) + " more", new RectangleF(up.X + ip, up.Bottom - 30 * S, cw - 2 * ip, 22 * S), f.Small, f.Faint, 2);
+            if (open.Count > maxRem) ui.Text("+" + (open.Count - maxRem) + " more", new RectangleF(up.X + ip, up.Bottom - 30 * S, cw - 2 * ip, 22 * S), f.Small, f.Faint, 2);
 
             // ---- focus (Pomodoro + how much of the day is left)
             Caption(ui, focus, ip, Pomodoro.Running ? Pomodoro.Name(Pomodoro.Current).ToUpperInvariant() : "FOCUS", f);

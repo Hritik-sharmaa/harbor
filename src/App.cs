@@ -110,6 +110,7 @@ namespace Harbor
             Media.Changed += RenderBars;
             Radios.Changed += delegate { RenderBars(); if (Flyout.Current != null) Flyout.Current.Refresh2(); };
             Tracker.ForegroundChanged += WatchForeground;
+            Tracker.ForegroundChanged += ClaudeBridge.ForegroundChanged; // a question that waited while its editor was in front
             Tracker.ForegroundChanged += delegate { foreach (var d in Displays) d.Dock.ClearAttention(); ApplyDockRules(); };
             Tracker.TitleChanged += h => { if (Look.Bool("DockBadges")) foreach (var d in Displays) d.Dock.UpdateBadges(); };
             SysInfo.Changed += RenderBars;
@@ -141,6 +142,13 @@ namespace Harbor
             Reminders.Init();
             ClipboardHistory.Init();
             Updates.Init();
+            LiveActivity.Init();
+            Timers.Init();
+            Timers.Changed += RenderBars; // the countdown in the centre of the menu bar
+            CalendarFeed.Init();
+            Downloads.Init();
+            Breaks.Init();
+            LastPlayed.Init();
             ClaudeBridge.Start();
             ClaudeBridge.EnsureHooks(Application.ExecutablePath); // e.g. a new editor or account profile since last time
             ClaudeBridge.Asked += Island.Attention;
@@ -399,8 +407,10 @@ namespace Harbor
                 N.RegisterHotKey(Host.Handle, 1, mods, (uint)'N');
                 N.RegisterHotKey(Host.Handle, 2, mods, (uint)'C');
                 N.RegisterHotKey(Host.Handle, 3, mods, (uint)'D');
+                N.RegisterHotKey(Host.Handle, 4, mods, 0x20); // Space: the island, from the keyboard
+                N.RegisterHotKey(Host.Handle, 5, mods, (uint)'V'); // the island's clipboard
             }
-            else for (int i = 1; i <= 3; i++) N.UnregisterHotKey(Host.Handle, i);
+            else for (int i = 1; i <= 5; i++) N.UnregisterHotKey(Host.Handle, i);
             hotkeysOn = want;
         }
 
@@ -413,6 +423,8 @@ namespace Harbor
                 case 1: { var r = p.Bar.ZoneRect("clock"); NotificationCenter.Toggle(p.Bar, r.Width > 0 ? r : new RectangleF(p.Bar.ScreenBounds.Width - 200, 0, 100, 30)); break; }
                 case 2: ControlCenter.ToggleOnPrimary(); break;
                 case 3: Settings.AutoHide = !Settings.AutoHide; ApplySettings(); break;
+                case 4: Island.ToggleFromKeyboard(null); break;
+                case 5: Island.ToggleFromKeyboard("clipboard"); break;
             }
         }
 
@@ -735,7 +747,7 @@ namespace Harbor
             shots.Add(new KeyValuePair<string, Flyout>("f_menu", mf));
             shots.Add(new KeyValuePair<string, Flyout>("f_nc", new NotificationCenter()));
             shots.Add(new KeyValuePair<string, Flyout>("f_sys", new SystemFlyout()));
-            foreach (var t in new[] { "dashboard", "media", "pomodoro", "weather", "screentime", "reminders", "clipboard", "shelf", "ai", "usage" })
+            foreach (var t in new[] { "dashboard", "media", "pomodoro", "weather", "screentime", "reminders", "clipboard", "shelf", "ai", "usage", "calendar", "timers", "notes", "downloads" })
                 shots.Add(new KeyValuePair<string, Flyout>("island_" + t, Island.ForSnapshot(t)));
             foreach (int pg in new[] { 0, 1, 2, 3, 4, 6 }) shots.Add(new KeyValuePair<string, Flyout>("w_settings" + pg, new SettingsWindow { Page = pg }));
             // give async sources (radios, media, bluetooth list) a moment to arrive
@@ -829,6 +841,10 @@ namespace Harbor
             ClipboardHistory.UseDemo();
             AudioOutputs.Demo = true;
             Shelf.UseDemo();
+            Timers.UseDemo();
+            CalendarFeed.UseDemo();
+            Notes.UseDemo();
+            Downloads.UseDemo();
             ClaudeBridge.UseDemo();
             foreach (var d in Displays) d.Bar.RenderBar();
         }
@@ -912,6 +928,15 @@ namespace Harbor
                 var sb = new System.Text.StringBuilder();
                 foreach (var o in AudioOutputs.List()) sb.AppendLine((o.Default ? "* " : "  ") + o.Name);
                 File.WriteAllText(args[ot + 1], sb.Length == 0 ? "(no outputs)" : sb.ToString());
+                return;
+            }
+            int ct = Array.IndexOf(args, "--calendar-test");
+            if (ct >= 0 && ct + 2 < args.Length)
+            {
+                var sb = new System.Text.StringBuilder();
+                try { foreach (var e in CalendarFeed.Parse(File.ReadAllText(args[ct + 1]), DateTime.Today.AddDays(-1), DateTime.Today.AddDays(8))) sb.AppendLine(e.Start.ToString("ddd yyyy-MM-dd HH:mm") + " - " + e.End.ToString("HH:mm") + (e.AllDay ? " (all day)" : "") + "  " + e.Title + (e.Link != null ? "  [join " + e.Link + "]" : "")); }
+                catch (Exception ex) { sb.AppendLine("ERROR " + ex); }
+                File.WriteAllText(args[ct + 2], sb.ToString());
                 return;
             }
             int ut = Array.IndexOf(args, "--update-test");

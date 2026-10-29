@@ -335,6 +335,12 @@ namespace Harbor
 
         internal BatteryFlyout() { LogicalWidth = 280; }
 
+        protected override void OnOpened()
+        {
+            BtBattery.Refresh(); // device batteries, read fresh while the panel is open
+            BtDevices.Refresh(() => { if (Visible) Refresh2(); });
+        }
+
         protected override void Build(UI ui)
         {
             var ps = SystemInformation.PowerStatus;
@@ -352,6 +358,17 @@ namespace Harbor
             string state = charging ? (pct >= 100 ? "Fully charged" : "Charging")
                 : (ps.BatteryLifeRemaining > 0 ? string.Format("{0} h {1} min remaining", ps.BatteryLifeRemaining / 3600, ps.BatteryLifeRemaining / 60 % 60) : "On battery");
             ui.Info(state);
+            // connected Bluetooth devices that report a battery (headphones, earbuds, controllers...)
+            bool any = false;
+            foreach (var d in BtDevices.List)
+            {
+                int lvl = d.Connected ? BtBattery.LevelFor(d.Name) : -1;
+                if (lvl < 0) continue;
+                if (!any) { ui.Separator(); ui.Section("Devices"); any = true; }
+                string n = d.Name.ToLowerInvariant();
+                string glyph = n.Contains("mouse") ? "" : n.Contains("keyboard") ? "" : n.Contains("controller") || n.Contains("xbox") ? "" : "";
+                ui.Item("dev" + d.Id, d.Name, null, glyph, rightText: lvl + "%");
+            }
             ui.Separator();
             ui.Item("saver", "Battery Settings…", () => Launcher.Run("ms-settings:batterysaver"), "");
             ui.Item("power", "Power & Sleep…", () => Launcher.Run("ms-settings:powersleep"), "");

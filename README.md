@@ -97,17 +97,23 @@ Rest the mouse on the centre of the menu bar and a dark panel drops down, like a
 | Tab | What's in it |
 | --- | --- |
 | **Dashboard** | Reminders, your most-used apps today, quick toggles (Focus, dark mode, Wi‑Fi, Bluetooth, keep awake, screenshot, lock), Pomodoro, day progress and weather |
-| **Media** | Cover, seek bar and controls, with synced lyrics beside them |
+| **Media** | Cover, seek bar and controls, with synced lyrics beside them. After the app closes: the last song, with Play to pick it up again |
+| **Calendar** | Your next meeting with **Join**, and today's and tomorrow's agenda, from your calendar's private iCal link (Google or Outlook) |
 | **Pomodoro** | Ring timer with Work / Short break / Long break, sessions today, a focus target (one of your reminders) and day progress. While it runs, the time shows in the centre of the menu bar |
+| **Timers** | Quick and custom timers (the soonest counts down in the menu bar), alarms, and world clocks |
 | **Weather** | Now, feels-like, humidity, wind, UV, rain chance, pressure and the next 12 hours, from [Open-Meteo](https://open-meteo.com) for the city you set |
 | **Screen Time** | Today's time per app and per category, counted and kept on your PC |
 | **Reminders** | Quick reminders with optional due times; a banner tells you when one is due |
+| **Notes** | Short notes you jot down; click to copy, pin the ones you reuse |
 | **Clipboard** | Your last 30 copies (text, links, images, files) and every new screenshot. Click to copy again, drag images and files out |
 | **Shelf** | Drag files onto the centre of the menu bar to keep them here, then drag them out wherever you need them |
+| **Downloads** | What's downloading now and your latest files, to open or drag out |
 | **AI Coding** | Your [Claude Code](https://claude.com/claude-code) sessions with live status (Running / Waiting / Done), model, branch, messages and tokens. When Claude asks permission, the island pops up with **Allow / Always allow / Deny** |
 | **Claude Usage** | Your plan limits (session and week) as Claude Code last saved them, plus tokens per day for the last 7 days on this PC, by editor and model |
 
-Set your city, working hours, Pomodoro lengths and the Claude Code link in **Harbor → General → Island**.
+Set your city, working hours, Pomodoro lengths and the Claude Code link in **Harbor → General → Island**. Pick which tabs show, and their order, in **Notch tabs**. **Alt+Win+Space** opens the notch from the keyboard (←/→ or 1–9 switch tabs), and **Alt+Win+V** opens the clipboard (↑/↓ and Enter paste).
+
+**Live activities:** a small pill drops out of the menu bar for a few seconds when something happens: charging, headphones connected, a download finished, a screenshot, a timer or alarm, or a meeting in 5 minutes (with Join). It can also remind you to rest your eyes, stand up or drink water.
 
 **Claude Code approvals** work through a [hook](https://code.claude.com/docs/en/hooks): switching them on adds `Harbor.exe --claude-hook` to `%USERPROFILE%\.claude\settings.json` (backed up first, your other hooks untouched). It applies to Claude Code in the terminal, VS Code and other editors. Whichever answers first wins: the island or the editor's own prompt. If Harbor isn't running or you don't answer, Claude Code simply asks you as usual. Switching it off, or uninstalling Harbor, removes the hook again.
 
@@ -212,11 +218,12 @@ bin\Harbor.exe --install
 
 Harbor has no telemetry or analytics, and never installs anything you didn't click.
 
-Harbor goes online for three things:
+Harbor goes online for four things:
 
 - **Updates:** once a day it asks GitHub's API for the list of Harbor releases. Nothing about you or your PC is sent. A new version is downloaded only when you click **Install**, from GitHub over HTTPS, and checked against GitHub's SHA-256 checksum before it's installed. Switch the daily check off in **Harbor → About**.
 - **Song lyrics:** while Now Playing or the island's Media tab is open, it asks [LRCLIB](https://lrclib.net), a free and open lyrics service, for the current song by sending its title, artist, album and length. Turn this off with the **Lyrics** button or in **Harbor → General**.
 - **Weather:** if you set a city, it looks the city up once and then asks [Open-Meteo](https://open-meteo.com) (free, no account) for that city's forecast while the Weather tab or Dashboard is open, at most every 20 minutes. Only the city name and its coordinates are sent.
+- **Calendar:** only if you paste a calendar link. Harbor downloads that link every 15 minutes and keeps the next 7 days in memory. The link is saved in your Harbor settings on this PC.
 
 Lyrics and weather are only fetched while you're looking at them.
 

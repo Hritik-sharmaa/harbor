@@ -238,6 +238,8 @@ namespace Harbor
             string id = "clip" + n, xid = "clipx" + n;
             bool hot = Hover == id || Hover == xid;
             GlassShape(ui, r, 14 * S, hot ? 30 : 14, hot ? 64 : 26);
+            if (byKeyboard && n == clipSel) // ↑/↓ picks, Enter pastes it where you were
+                using (var pen = new Pen(Color.FromArgb(230, 255, 255, 255), 2 * S)) using (var p = Gfx.RoundRect(RectangleF.Inflate(r, -1 * S, -1 * S), 13 * S)) ui.G.DrawPath(pen, p);
             float ix = r.X + 11 * S, iw = r.Width - 22 * S;
 
             // who it came from, and when

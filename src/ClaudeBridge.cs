@@ -30,8 +30,10 @@ namespace Harbor
 
         public sealed class Request
         {
-            public string SessionId, Cwd, Tool, Summary, Detail;
+            public string SessionId, Cwd, Tool, Summary, Detail, TranscriptPath;
             public DateTime At = DateTime.Now;
+            public readonly HashSet<int> HostPids = new HashSet<int>(); // the editor / terminal Claude Code runs in
+            public bool Deferred;           // that editor was in front, so the island didn't pop up (yet)
             public Action<string> Answer;   // "allow", "always", "deny", "answers:{json}" (null: let Claude Code ask)
             public bool Done;
             public List<Question> Questions; // AskUserQuestion: what Claude is asking, instead of a yes/no
@@ -127,10 +129,20 @@ namespace Harbor
                 string answer = null;
                 var req = MakeRequest(ev);
                 req.Answer = a => { answer = a; answered.Set(); };
-                App.Post(() => { Pending.Add(req); Touch(req.SessionId, req.Cwd, "Waiting", null); Fire(); if (Asked != null) Asked(); });
-                // the hook process closes the pipe if Claude Code decided elsewhere (the editor's own prompt) or timed out
+                App.Post(() =>
+                {
+                    Pending.Add(req);
+                    Touch(req.SessionId, req.Cwd, "Waiting", null);
+                    // you're already in the editor that's asking: answer there; the island pops up if you switch away
+                    req.Deferred = HostInFront(req);
+                    Fire();
+                    if (!req.Deferred && Asked != null) Asked();
+                });
+                // the hook process closes the pipe if Claude Code timed out
                 var gone = new ManualResetEvent(false);
                 ThreadPool.QueueUserWorkItem(delegate { try { pipe.Read(new byte[1], 0, 1); } catch { } gone.Set(); });
+                // answered in the editor's own prompt: Claude Code doesn't tell the hook, but the result lands in the transcript
+                ThreadPool.QueueUserWorkItem(delegate { if (AnsweredElsewhere(req, new WaitHandle[] { answered, gone })) App.Post(() => Dismiss(req)); });
                 WaitHandle.WaitAny(new WaitHandle[] { answered, gone }, TimeSpan.FromSeconds(115));
                 if (answer != null)
                 {
@@ -144,7 +156,10 @@ namespace Harbor
 
         static Request MakeRequest(Dictionary<string, object> ev)
         {
-            var r = new Request { SessionId = Str(ev, "session_id"), Cwd = Str(ev, "cwd"), Tool = Str(ev, "tool_name") ?? "a tool" };
+            var r = new Request { SessionId = Str(ev, "session_id"), Cwd = Str(ev, "cwd"), Tool = Str(ev, "tool_name") ?? "a tool", TranscriptPath = Str(ev, "transcript_path") };
+            object hp;
+            if (ev.TryGetValue("harbor_host_pids", out hp) && hp is IList)
+                foreach (var p in (IList)hp) { int pid; if (p != null && int.TryParse(Convert.ToString(p, CultureInfo.InvariantCulture), out pid)) r.HostPids.Add(pid); }
             object ti;
             var input = ev.TryGetValue("tool_input", out ti) ? ti as Dictionary<string, object> : null;
             if (input != null)
@@ -208,7 +223,7 @@ namespace Harbor
             switch (name)
             {
                 case "SessionStart": Touch(id, cwd, "Idle", Str(ev, "model")); break;
-                case "UserPromptSubmit": Touch(id, cwd, "Running", null); break;
+                case "UserPromptSubmit": Touch(id, cwd, "Running", null); DismissSession(id); break; // a new prompt: anything it asked is settled
                 case "Notification":
                     // "permission_prompt": Claude is waiting on you in the editor; "idle_prompt": it's done and waiting
                     string type = Str(ev, "notification_type");
@@ -219,11 +234,11 @@ namespace Harbor
                         var s = Touch(id, cwd, "Done", null);
                         string msg = Str(ev, "last_assistant_message");
                         if (!string.IsNullOrEmpty(msg)) s.LastMessage = OneLine(msg, 160);
-                        Pending.RemoveAll(p => p.SessionId == id);
+                        DismissSession(id);
                         if (Look.Bool("ClaudeBanners")) Banners.ShowLocal("Claude Code", "Done in " + s.Project, s.LastMessage ?? "Claude finished and is waiting for you.");
                         break;
                     }
-                case "SessionEnd": Sessions.Remove(id ?? ""); Pending.RemoveAll(p => p.SessionId == id); break;
+                case "SessionEnd": Sessions.Remove(id ?? ""); DismissSession(id); break;
             }
             Fire();
         }
@@ -250,6 +265,112 @@ namespace Harbor
             if (answer != null) Touch(r.SessionId, r.Cwd, answer == "deny" ? "Done" : "Running", null);
             r.Answer(answer);
             Fire();
+        }
+
+        /// <summary>Settled somewhere else (the editor's prompt, a new message): take it off the island and let the hook go.</summary>
+        static void Dismiss(Request r)
+        {
+            if (r.Done) return;
+            r.Done = true;
+            Pending.Remove(r);
+            r.Answer(null); // the hook prints nothing, which changes nothing: Claude Code already has its answer
+            Fire();
+        }
+
+        static void DismissSession(string id)
+        {
+            foreach (var r in Pending.FindAll(p => p.SessionId == id)) Dismiss(r);
+        }
+
+        // ------------------------------------------------------------------ answered in the editor
+
+        static readonly Regex rxToolUse = new Regex("\"type\":\"tool_use\",\"id\":\"(toolu_[A-Za-z0-9_]+)\",\"name\":\"([^\"]+)\"");
+
+        /// <summary>
+        /// Waits (checking about once a second, only while the request is open) for the result of this tool call to appear
+        /// in the session's transcript: that means it was allowed or denied in the editor. True if it did.
+        /// </summary>
+        static bool AnsweredElsewhere(Request r, WaitHandle[] stop)
+        {
+            try
+            {
+                string path = r.TranscriptPath;
+                if (string.IsNullOrEmpty(path) || !File.Exists(path)) return false;
+                long start = new FileInfo(path).Length;
+                string id = PendingToolUse(path, start, r);
+                // the tool call can reach the transcript a moment after the request: look again for a few seconds
+                for (int i = 0; id == null && i < 8; i++)
+                {
+                    if (WaitHandle.WaitAny(stop, 900) != WaitHandle.WaitTimeout) return false;
+                    start = new FileInfo(path).Length;
+                    id = PendingToolUse(path, start, r);
+                }
+                if (id == null) return false;
+                string mark = "\"tool_use_id\":\"" + id + "\"";
+                string carry = "";
+                while (WaitHandle.WaitAny(stop, 900) == WaitHandle.WaitTimeout)
+                {
+                    long len = new FileInfo(path).Length;
+                    if (len < start) start = 0; // rewritten
+                    if (len == start) continue;
+                    string added = carry + ReadRange(path, start, len);
+                    start = len;
+                    if (added.IndexOf(mark, StringComparison.Ordinal) >= 0) return true;
+                    carry = added.Length > mark.Length ? added.Substring(added.Length - mark.Length) : added; // a mark split between reads
+                }
+            }
+            catch (Exception ex) { App.Log(ex); }
+            return false;
+        }
+
+        /// <summary>The id of the tool call this request is about: the newest one of that tool still without a result.</summary>
+        static string PendingToolUse(string path, long end, Request r)
+        {
+            string tail = ReadRange(path, Math.Max(0, end - 512 * 1024), end);
+            string best = null;
+            foreach (Match m in rxToolUse.Matches(tail))
+            {
+                if (m.Groups[2].Value != r.Tool) continue;
+                string id = m.Groups[1].Value;
+                if (tail.IndexOf("\"tool_use_id\":\"" + id + "\"", m.Index, StringComparison.Ordinal) >= 0) continue; // already answered
+                best = id;
+            }
+            return best;
+        }
+
+        static string ReadRange(string path, long from, long to)
+        {
+            using (var fs = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
+            {
+                fs.Seek(from, SeekOrigin.Begin);
+                var buf = new byte[(int)Math.Min(to - from, 8 * 1024 * 1024)];
+                int n = 0, got;
+                while (n < buf.Length && (got = fs.Read(buf, n, buf.Length - n)) > 0) n += got;
+                return Encoding.UTF8.GetString(buf, 0, n);
+            }
+        }
+
+        // ------------------------------------------------------------------ the editor that's asking
+
+        /// <summary>Is the editor or terminal this request came from the window you're using?</summary>
+        static bool HostInFront(Request r)
+        {
+            if (r.HostPids.Count == 0) return false;
+            uint pid;
+            N.GetWindowThreadProcessId(N.GetForegroundWindow(), out pid);
+            return r.HostPids.Contains((int)pid);
+        }
+
+        /// <summary>You switched apps: a question that waited because its editor was in front now pops up the island.</summary>
+        public static void ForegroundChanged()
+        {
+            foreach (var r in Pending)
+                if (r.Deferred && !HostInFront(r))
+                {
+                    r.Deferred = false;
+                    if (Asked != null) Asked();
+                    return;
+                }
         }
 
         static string Str(Dictionary<string, object> d, string k)
@@ -283,8 +404,12 @@ namespace Harbor
                 {
                     try { pipe.Connect(300); } catch { return; } // Harbor isn't running: stay out of the way
                     var w = new StreamWriter(pipe, new UTF8Encoding(false)) { AutoFlush = true };
+                    string line = input.Replace("\r", " ").Replace("\n", " ");
+                    // which editor / terminal we run in, so Harbor doesn't pop up while you're already looking at it
+                    int brace = line.IndexOf('{');
+                    if (ask && brace >= 0) line = line.Substring(0, brace + 1) + "\"harbor_host_pids\":[" + string.Join(",", HostChain()) + "]," + line.Substring(brace + 1);
                     // newlines between JSON tokens are just whitespace; inside strings they're already escaped
-                    w.WriteLine(input.Replace("\r", " ").Replace("\n", " "));
+                    w.WriteLine(line);
                     if (!ask) return;
                     string answer = null;
                     var t = new Thread(() => { try { answer = new StreamReader(pipe, Encoding.UTF8).ReadLine(); } catch { } }) { IsBackground = true };
@@ -295,6 +420,53 @@ namespace Harbor
                 }
             }
             catch { /* never break Claude Code: no output means "ask as usual" */ }
+        }
+
+        [System.Runtime.InteropServices.StructLayout(System.Runtime.InteropServices.LayoutKind.Sequential, CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+        struct PROCESSENTRY32
+        {
+            public uint dwSize, cntUsage, th32ProcessID;
+            public IntPtr th32DefaultHeapID;
+            public uint th32ModuleID, cntThreads, th32ParentProcessID;
+            public int pcPriClassBase;
+            public uint dwFlags;
+            [System.Runtime.InteropServices.MarshalAs(System.Runtime.InteropServices.UnmanagedType.ByValTStr, SizeConst = 260)] public string szExeFile;
+        }
+        [System.Runtime.InteropServices.DllImport("kernel32.dll", SetLastError = true)] static extern IntPtr CreateToolhelp32Snapshot(uint flags, uint pid);
+        [System.Runtime.InteropServices.DllImport("kernel32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)] static extern bool Process32FirstW(IntPtr snap, ref PROCESSENTRY32 e);
+        [System.Runtime.InteropServices.DllImport("kernel32.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)] static extern bool Process32NextW(IntPtr snap, ref PROCESSENTRY32 e);
+        [System.Runtime.InteropServices.DllImport("kernel32.dll")] static extern bool CloseHandle(IntPtr h);
+
+        // the Windows shell and services are everyone's ancestors; being "in" them doesn't mean you're in the editor
+        static readonly string[] notHosts = { "explorer.exe", "svchost.exe", "services.exe", "wininit.exe", "winlogon.exe", "sihost.exe", "harbor.exe", "userinit.exe" };
+
+        /// <summary>The processes above this hook (Claude Code, the editor or terminal that runs it...), as PIDs.</summary>
+        static List<string> HostChain()
+        {
+            var chain = new List<string>();
+            IntPtr snap = CreateToolhelp32Snapshot(2 /*TH32CS_SNAPPROCESS*/, 0);
+            if (snap == IntPtr.Zero || snap == (IntPtr)(-1)) return chain;
+            try
+            {
+                var parent = new Dictionary<uint, uint>();
+                var exe = new Dictionary<uint, string>();
+                var e = new PROCESSENTRY32 { dwSize = (uint)System.Runtime.InteropServices.Marshal.SizeOf(typeof(PROCESSENTRY32)) };
+                for (bool ok = Process32FirstW(snap, ref e); ok; ok = Process32NextW(snap, ref e))
+                {
+                    parent[e.th32ProcessID] = e.th32ParentProcessID;
+                    exe[e.th32ProcessID] = (e.szExeFile ?? "").ToLowerInvariant();
+                }
+                uint pid = (uint)System.Diagnostics.Process.GetCurrentProcess().Id, up;
+                for (int depth = 0; depth < 12 && parent.TryGetValue(pid, out up) && up != 0 && up != pid; depth++)
+                {
+                    pid = up;
+                    string name;
+                    if (exe.TryGetValue(pid, out name) && Array.IndexOf(notHosts, name) < 0) chain.Add(pid.ToString(CultureInfo.InvariantCulture));
+                }
+            }
+            catch { }
+            finally { CloseHandle(snap); }
+            return chain;
         }
 
         static string Decision(string answer, Dictionary<string, object> ev)

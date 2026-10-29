@@ -449,7 +449,11 @@ namespace Harbor
                 float mw = showMedia ? Math.Min(Measure(g, Media.Title, small) + 40 * S, 260 * S) : 0;
                 bool island = Look.Bool("Island");
                 bool showPomo = island && (Pomodoro.Running || Pomodoro.Progress > 0);
-                string pomoText = showPomo ? ((int)Pomodoro.Remaining.TotalMinutes).ToString("00") + ":" + Pomodoro.Remaining.Seconds.ToString("00") : null;
+                // no Pomodoro going: a running timer counts down in the same spot
+                var timer = island && !Pomodoro.Running ? Timers.Soonest() : null;
+                if (timer != null) showPomo = true;
+                string pomoText = timer != null ? Timers.Text(timer.Left)
+                    : showPomo ? ((int)Pomodoro.Remaining.TotalMinutes).ToString("00") + ":" + Pomodoro.Remaining.Seconds.ToString("00") : null;
                 float pomoW = showPomo ? Measure(g, pomoText, small) + 36 * S : 0;
                 mw += pomoW;
                 float cw = (clock != null && !clockRight) ? Measure(g, clock, bold) + 22 * S : 0;
@@ -465,7 +469,7 @@ namespace Harbor
                 Zone media = null, pomo = null;
                 if (showPomo)
                 {
-                    pomo = AddZone("pomo", c, pomoW, z => global::Harbor.Island.Open(this, z.R, "pomodoro"));
+                    pomo = AddZone("pomo", c, pomoW, z => global::Harbor.Island.Open(this, z.R, timer != null ? "timers" : "pomodoro"));
                     c += pomoW;
                 }
                 if (showMedia)
@@ -537,14 +541,15 @@ namespace Harbor
 
                 if (pomo != null)
                 {
-                    using (var pb = new SolidBrush(Pomodoro.Current == Pomodoro.Phase.Work ? Color.FromArgb(255, 232, 160, 96) : Color.FromArgb(255, 100, 200, 160)))
+                    float prog = timer != null ? 1 - timer.Progress : Pomodoro.Progress;
+                    Color ringColor = timer != null ? Color.FromArgb(255, 255, 179, 64) : Pomodoro.Current == Pomodoro.Phase.Work ? Color.FromArgb(255, 232, 160, 96) : Color.FromArgb(255, 100, 200, 160);
                     {
                         // a tiny progress ring, then the time left
                         float rd = 11 * S, rx = pomo.R.X + 8 * S, ry = iy + ih / 2 - rd / 2;
                         using (var tp = new Pen(Color.FromArgb(60, text), 2 * S)) g.DrawEllipse(tp, rx, ry, rd, rd);
-                        using (var ap = new Pen(pb.Color, 2 * S)) if (Pomodoro.Progress > 0) g.DrawArc(ap, rx, ry, rd, rd, -90, 360 * Pomodoro.Progress);
+                        using (var ap = new Pen(ringColor, 2 * S)) if (prog > 0) g.DrawArc(ap, rx, ry, rd, rd, -90, 360 * prog);
                     }
-                    g.DrawString(pomoText, small, Pomodoro.Running ? brush : dim, new RectangleF(pomo.R.X + 24 * S, iy + 0.5f * S, pomo.R.Width - 28 * S, ih), lf);
+                    g.DrawString(pomoText, small, Pomodoro.Running || timer != null ? brush : dim, new RectangleF(pomo.R.X + 24 * S, iy + 0.5f * S, pomo.R.Width - 28 * S, ih), lf);
                 }
                 if (media != null)
                 {

@@ -241,6 +241,12 @@ namespace Harbor
                 });
             }
             Add(it);
+            if (screenshot)
+                LiveActivity.Show(new LiveActivity.Item
+                {
+                    Image = it.Thumb, Title = "Screenshot", Detail = it.ImageSize.Width + " × " + it.ImageSize.Height + " · copied",
+                    Action = "Show", Click = () => Island.OpenTab("clipboard"),
+                });
         }
 
         static Bitmap MakeThumb(Image img)

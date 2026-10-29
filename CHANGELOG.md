@@ -1,5 +1,38 @@
 # Changelog
 
+## 0.3.0 — 2026-10-29 (preview)
+
+**New in the notch**
+- **Choose your tabs:** in **Harbor → General → Notch tabs**, switch off the tabs you don't use and reorder the rest. AI Coding and Claude Usage start hidden on PCs without Claude Code.
+- **Keyboard:**
+  - **Alt+Win+Space** opens the notch on the screen you're using. ←/→, Tab or 1–9 switch tabs; Esc closes it.
+  - **Alt+Win+V** opens Clipboard: ↑/↓ pick a copy and Enter pastes it into the app you were in.
+- **Live activities:** a small pill drops out of the menu bar for a few seconds, on the screen you're working on. Click it to act.
+  - Charging started or stopped, with the battery level.
+  - Headphones connected, with their battery.
+  - A download finished (Open).
+  - A screenshot was taken (Show).
+  - A timer or alarm is done (+1 min / Snooze).
+  - A meeting starts in 5 minutes (Join).
+
+  Quiet over fullscreen apps; only timers, alarms and meetings come through during Focus.
+- **Timers:** quick 1/5/10/15/25-minute timers or any length ("12", "1:30", "45s"), several at once, with pause. The soonest one counts down in the menu bar.
+- **Alarms and world clocks:** alarms ("7:30 Wake up", "6:15 pm gym") with a switch each, and clocks for any city with the time difference.
+- **Calendar:** paste your calendar's private iCal link (Google or Outlook, no sign-in) in **Harbor → General → Calendar**.
+  - The Calendar tab shows the next meeting with **Join meeting**, plus today's and tomorrow's agenda.
+  - The Dashboard's Up next starts with your next meeting.
+  - Teams, Meet and Zoom links are found automatically.
+  - Repeating meetings, moved or cancelled ones, and time zones (with daylight saving) are handled.
+- **Notes:** jot down short notes. Click one to copy it, pin the ones you reuse.
+- **Downloads:** what's downloading now and your latest 8 files. Open them, drag them out, or right-click to show them in Explorer.
+- **Last played:** when the music app is closed, the Media tab shows the last song. Play opens Spotify (or that app) and carries on with it; for browser media it offers a YouTube search.
+- **Break reminders:** rest your eyes every 20 minutes and stand up every hour (both on); drink water every 90 minutes (off). Only time at the PC counts, and they wait during Focus and fullscreen.
+- **Device batteries:** the Battery panel lists connected Bluetooth devices that report a battery level.
+
+**Fixed**
+- **Claude Code questions answered in the editor stay in the notch.** Claude Code doesn't tell Harbor when you answer in VS Code's own prompt. While a question is open, Harbor now watches that session's history for the answer to that exact tool call, so the notch clears within about a second of you answering in the editor. A new message or Claude finishing clears it too.
+- **The notch pops up while you're already in the editor that's asking.** Harbor now knows which app the question came from (VS Code, Antigravity, a terminal). If that app is in front, the notch stays closed and you answer there. If you switch to another app while Claude is still waiting, the notch pops up then.
+
 ## 0.2.4 — 2026-10-28 (preview)
 
 **New**

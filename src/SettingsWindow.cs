@@ -49,6 +49,7 @@ namespace Harbor
             ShowInTaskbar = true;
             try { Icon = Icon.ExtractAssociatedIcon(Application.ExecutablePath); } catch { }
             Updates.Changed += delegate { if (Visible && page == 6) Refresh2(); };
+            CalendarFeed.Changed += delegate { if (Visible && page == 0) Refresh2(); };
         }
 
         protected override void OnOpened()
@@ -109,6 +110,51 @@ namespace Harbor
                 Refresh2();
             });
             Refresh2();
+        }
+
+        void SaveCalendar()
+        {
+            FocusField = null;
+            Look.Set("CalendarUrls", Field("calurl").Trim());
+            Settings.Save();
+            CalendarFeed.Refresh();
+            Refresh2();
+        }
+
+        /// <summary>Which tabs the island shows, in what order: a switch per tab, and arrows to move it.</summary>
+        void NotchTabs(UI ui)
+        {
+            Card(ui, "Notch tabs");
+            ui.Info("Switch off the tabs you don't use; the arrows change the order. Alt+Win+Space opens the notch from the keyboard.");
+            var cfg = Island.TabConfig();
+            using (var gf = new Font(Fonts.Icons, 10f * S, GraphicsUnit.Pixel))
+            using (var tf = new Font(Fonts.Icons, 13f * S, GraphicsUnit.Pixel))
+                for (int i = 0; i < cfg.Count; i++)
+                {
+                    var r = ui.Custom(32);
+                    string id = cfg[i].Key;
+                    string glyph = Island.GlyphOf(id) ?? "";
+                    ui.Glyph(glyph, new RectangleF(r.X + 8 * S, r.Y, 24 * S, r.Height), tf, cfg[i].Value ? ui.TextBrush : ui.DimBrush);
+                    ui.Text(Island.NameOf(id), new RectangleF(r.X + 40 * S, r.Y, r.Width - 160 * S, r.Height), ui.Body, cfg[i].Value ? ui.TextBrush : ui.DimBrush);
+                    int k = i;
+                    var sw = new RectangleF(r.Right - 52 * S, r.Y + 6 * S, 40 * S, 22 * S);
+                    ui.Switch(sw, cfg[i].Value);
+                    ui.AddHit("nt_on" + id, sw, () => { var c = Island.TabConfig(); c[k] = new KeyValuePair<string, bool>(c[k].Key, !c[k].Value); Island.SaveTabConfig(c); }, true);
+                    var up = new RectangleF(sw.X - 64 * S, r.Y + 4 * S, 26 * S, 26 * S);
+                    var down = new RectangleF(sw.X - 34 * S, r.Y + 4 * S, 26 * S, 26 * S);
+                    if (i > 0)
+                    {
+                        if (Hover == "nt_up" + id) ui.Fill(up, Theme.TileHover, 13 * S);
+                        ui.Glyph("", up, gf, ui.DimBrush);
+                        ui.AddHit("nt_up" + id, up, () => { var c = Island.TabConfig(); var t = c[k]; c[k] = c[k - 1]; c[k - 1] = t; Island.SaveTabConfig(c); }, true);
+                    }
+                    if (i < cfg.Count - 1)
+                    {
+                        if (Hover == "nt_dn" + id) ui.Fill(down, Theme.TileHover, 13 * S);
+                        ui.Glyph("", down, gf, ui.DimBrush);
+                        ui.AddHit("nt_dn" + id, down, () => { var c = Island.TabConfig(); var t = c[k]; c[k] = c[k + 1]; c[k + 1] = t; Island.SaveTabConfig(c); }, true);
+                    }
+                }
         }
 
         static void Int(UI ui, string key, string label, int min, int max, string unit)
@@ -181,7 +227,7 @@ namespace Harbor
             cardTop = -1;
         }
 
-        public const string Version = "0.2.4";
+        public const string Version = "0.3.0";
         public const string RepoUrl = "https://github.com/hritik-sharmaa/harbor";
         static readonly string[] pageInfo =
         {
@@ -328,6 +374,25 @@ namespace Harbor
                 ui.ToggleRow("stime", "Screen Time", Look.Bool("ScreenTime"), v => { Look.Set("ScreenTime", v); Settings.Save(); if (v) ScreenTime.Init(); }, "Time per app, counted and kept on this PC only");
                 ui.ToggleRow("cliph", "Clipboard history", Look.Bool("ClipboardHistory"), v => { Look.Set("ClipboardHistory", v); Settings.Save(); ClipboardHistory.Init(); }, "Your last 30 copies and screenshots. Kept in memory and cleared when Harbor quits; password managers' copies are skipped");
             }
+
+            if (Look.Bool("Island")) NotchTabs(ui);
+
+            Card(ui, "Live activities");
+            Toggle(ui, "LiveActivities", "Live activities under the menu bar", "A small pill for a few seconds: charging, headphones, downloads, screenshots, timers and meetings. Click it to act");
+            ui.Info("Break reminders (only time you're at the PC counts; they wait during Focus and fullscreen)");
+            ui.ToggleRow("brkeyes", "Rest your eyes every 20 minutes", Look.Bool("BreakEyes"), v => { Look.Set("BreakEyes", v); Settings.Save(); Breaks.Init(); }, "Look at something far away for 20 seconds (the 20-20-20 rule)");
+            ui.ToggleRow("brkstand", "Stand up every hour", Look.Bool("BreakStand"), v => { Look.Set("BreakStand", v); Settings.Save(); Breaks.Init(); });
+            ui.ToggleRow("brkwater", "Drink water every 90 minutes", Look.Bool("BreakWater"), v => { Look.Set("BreakWater", v); Settings.Save(); Breaks.Init(); });
+
+            Card(ui, "Calendar");
+            ui.Info("Your next meetings in the island, with Join. Paste your calendar's private iCal link:");
+            ui.Info("Google: Settings → your calendar → Secret address in iCal format.  Outlook: Settings → Shared calendars → Publish → ICS");
+            if (!Fields.ContainsKey("calurl")) Fields["calurl"] = Look.Get("CalendarUrls");
+            ui.TextField("calurl", "https://calendar.google.com/calendar/ical/…/basic.ics", true, SaveCalendar);
+            ui.Button("calsave", CalendarFeed.Busy ? "Loading…" : "Save Calendar Link", SaveCalendar, false, true);
+            if (CalendarFeed.Configured)
+                ui.Info(CalendarFeed.Error ?? (CalendarFeed.Fetched != null ? CalendarFeed.Events.Count + " events in the next 7 days · updated " + CalendarFeed.Fetched.Value.ToString("t") : "Loading…"));
+            ui.Info("The link stays on this PC; Harbor downloads it every 15 minutes. Keep it private, like a password.");
 
             Card(ui, "Focus");
             ui.ToggleRow("focuson", "Focus now", FocusMode.On, v => { if (v) FocusMode.Start(); else FocusMode.Stop(); Refresh2(); },
