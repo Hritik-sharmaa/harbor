@@ -5,3 +5,5 @@ dist/
 .vs/
 .vscode/
 Thumbs.db
+
+site/node_modules/

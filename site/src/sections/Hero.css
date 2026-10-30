@@ -1,0 +1,58 @@
+.hero { padding: 150px 0 120px; overflow: hidden; }
+.hero-sky {
+  position: absolute; inset: 0; pointer-events: none;
+  background:
+    radial-gradient(46% 36% at 50% 0%, rgba(59, 130, 246, .26), transparent 70%),
+    radial-gradient(26% 26% at 78% 8%, rgba(236, 200, 150, .16), transparent 70%);
+}
+/* faint stars, drifting */
+.hero-sky::before {
+  content: ""; position: absolute; inset: 0; opacity: .5; animation: drift 60s linear infinite;
+  background-image: radial-gradient(1px 1px at 12% 18%, #fff, transparent), radial-gradient(1px 1px at 68% 9%, #fff, transparent),
+    radial-gradient(1px 1px at 84% 30%, #fff, transparent), radial-gradient(1px 1px at 30% 34%, #cfe0ff, transparent),
+    radial-gradient(1.5px 1.5px at 47% 22%, #fff, transparent), radial-gradient(1px 1px at 92% 14%, #cfe0ff, transparent),
+    radial-gradient(1px 1px at 6% 40%, #fff, transparent), radial-gradient(1px 1px at 58% 38%, #fff, transparent);
+  mask-image: linear-gradient(#000, transparent 55%); -webkit-mask-image: linear-gradient(#000, transparent 55%);
+}
+@keyframes drift { to { transform: translateY(-40px); } }
+
+.hero-copy { position: relative; display: flex; flex-direction: column; align-items: center; text-align: center; }
+.hero h1 { max-width: 11ch; }
+.pill-link {
+  display: inline-flex; align-items: center; gap: 10px; margin-bottom: 30px; padding: 4px 14px 4px 4px; border-radius: 999px;
+  font-size: 14px; color: var(--text-2); background: rgba(255, 255, 255, .04); border: 1px solid var(--line-2); transition: background .2s, color .2s;
+}
+.pill-link:hover { background: rgba(255, 255, 255, .08); color: var(--text); }
+.pill-new { font-family: var(--mono); font-size: 12px; padding: 2px 9px; border-radius: 999px; background: var(--blue-deep); color: #fff; }
+.hero-lead { color: var(--text-2); font-size: clamp(17px, 1.5vw, 20px); max-width: 32em; margin-top: 26px; }
+.hero-cta { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin-top: 36px; width: 100%; }
+.hero-specs { display: flex; flex-wrap: wrap; justify-content: center; gap: 4px 0; margin-top: 22px; font-size: 13px; color: var(--muted); }
+.hero-specs li + li::before { content: "·"; margin: 0 10px; color: var(--line-2); }
+
+/* the desktop */
+.desk-wrap { position: relative; perspective: 2000px; margin-top: 84px; }
+.desk-glow {
+  position: absolute; left: 50%; top: 5%; width: 80%; height: 80%; translate: -50% 0; opacity: .45; pointer-events: none;
+  background: radial-gradient(closest-side, rgba(59, 130, 246, .5), rgba(236, 200, 150, .22) 60%, transparent); filter: blur(60px);
+}
+.desk {
+  position: relative; transform-origin: 50% 0; border-radius: 18px; overflow: hidden;
+  box-shadow: 0 0 0 1px var(--line-2), 0 0 0 9px rgba(255, 255, 255, .035), 0 60px 140px rgba(0, 0, 0, .65);
+}
+.desk-shot { width: 100%; }
+/* hangs from the menu bar, which is 30 of the screenshot's 1080 px */
+.island {
+  position: absolute; left: 50%; top: 2.78%; translate: -50% 0; overflow: hidden; background: #000;
+  border-radius: 0 0 clamp(10px, 1.6vw, 22px) clamp(10px, 1.6vw, 22px); box-shadow: 0 20px 50px rgba(0, 0, 0, .45);
+}
+.island img { width: 100%; height: 100%; }
+
+.hero-under { display: flex; flex-direction: column; align-items: center; gap: 22px; margin-top: 40px; }
+.hero-caption { min-height: 3.4em; max-width: 34em; text-align: center; color: var(--text-2); font-size: 15px; }
+.hero-caption b { color: var(--text); font-weight: 600; }
+.caption-shot { display: none; }
+/* on a phone the island is too small to read inside the desktop, so its view also shows here */
+@media (max-width: 700px) {
+  .caption-shot { display: block; width: 100%; margin-bottom: 14px; border-radius: 0 0 18px 18px; }
+}
+@media (prefers-reduced-motion: reduce) { .hero-sky::before { animation: none; } }

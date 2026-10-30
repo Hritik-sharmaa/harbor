@@ -1,0 +1,20 @@
+.faq { max-width: 860px; }
+.faq .head { margin-bottom: 36px; }
+.faq .sub a { color: var(--text); text-decoration: underline; text-decoration-color: var(--line-2); text-underline-offset: 3px; }
+.faq-topics { margin: 0 auto 32px; }
+.faq-list { border-top: 1px solid var(--line); }
+.faq-list details { border-bottom: 1px solid var(--line); interpolate-size: allow-keywords; }
+.faq-list summary {
+  display: flex; justify-content: space-between; align-items: center; gap: 20px; padding: 22px 4px; cursor: pointer; list-style: none;
+  font-family: var(--serif); font-size: clamp(19px, 2vw, 23px); font-weight: 500; letter-spacing: -.01em;
+}
+.faq-list summary::-webkit-details-marker { display: none; }
+.faq-list p { padding: 0 4px 24px; color: var(--text-2); max-width: 44em; }
+/* opens smoothly where the browser supports animating to auto height */
+.faq-list details::details-content { height: 0; overflow: clip; transition: height .4s var(--ease-out), content-visibility .4s allow-discrete; }
+.faq-list details[open]::details-content { height: auto; }
+.plus { position: relative; flex: none; width: 14px; height: 14px; }
+.plus::before, .plus::after { content: ""; position: absolute; inset: 6px 0; height: 2px; border-radius: 2px; background: var(--muted); transition: transform .3s var(--ease-out); }
+.plus::after { transform: rotate(90deg); }
+details[open] .plus::after { transform: rotate(0); }
+@media (prefers-reduced-motion: reduce) { .faq-list details::details-content { transition: none; } }

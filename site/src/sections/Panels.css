@@ -1,0 +1,13 @@
+.panels { padding-bottom: 0; overflow: hidden; }
+.panels::before { content: ""; position: absolute; inset: 0; pointer-events: none; background: radial-gradient(60% 50% at 50% 60%, rgba(59, 130, 246, .12), transparent 70%); }
+.track { display: flex; align-items: flex-start; gap: 32px; overflow-x: auto; scrollbar-width: none; padding: 10px max(24px, calc((100vw - var(--max)) / 2 + 24px)) 120px; perspective: 1400px; }
+.track::-webkit-scrollbar { display: none; }
+.panels.pinned { height: 100vh; padding: 90px 0 0; display: flex; flex-direction: column; justify-content: center; }
+.panels.pinned .wrap { width: 100%; }
+.panels.pinned .head { margin-bottom: 28px; gap: 10px; }
+.panels.pinned h2 { font-size: clamp(32px, 3.6vw, 48px); max-width: none; }
+.panels.pinned .track { overflow: visible; width: max-content; padding-bottom: 0; }
+.panel { flex: none; }
+.panel img { height: min(var(--h), 40vh); width: auto; border-radius: 18px; box-shadow: 0 0 0 1px var(--line-2), 0 30px 70px rgba(0, 0, 0, .6); }
+.panel figcaption { max-width: 280px; margin-top: 18px; font-size: 14px; color: var(--text-2); }
+.panel b { display: block; color: var(--text); font-family: var(--serif); font-size: 19px; font-weight: 500; }

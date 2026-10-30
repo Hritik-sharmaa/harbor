@@ -1,0 +1,38 @@
+.live-grid { display: grid; grid-template-columns: 1fr 1.1fr; gap: 64px; align-items: center; }
+.live .head { margin-bottom: 36px; }
+@media (max-width: 900px) { .live-grid { grid-template-columns: 1fr; gap: 40px; } }
+
+.live-list { display: grid; gap: 4px; max-width: 420px; }
+.live-list button {
+  display: flex; align-items: center; gap: 14px; width: 100%; padding: 12px 16px; border-radius: 14px; text-align: left;
+  color: var(--muted); border: 1px solid transparent; transition: color .3s, background .3s, border-color .3s;
+}
+.live-list button:hover { color: var(--text-2); }
+.live-list button.on { color: var(--text); background: rgba(255, 255, 255, .04); border-color: var(--line); }
+.live-list span { font-weight: 500; }
+.live-list small { margin-left: auto; font-family: var(--mono); font-size: 12px; color: var(--muted); }
+
+.live-stage {
+  position: relative; display: flex; justify-content: center; aspect-ratio: 4 / 3; border-radius: 24px; overflow: hidden; isolation: isolate;
+  border: 1px solid var(--line-2); box-shadow: 0 40px 100px rgba(0, 0, 0, .5);
+}
+.live-stage::before {
+  content: ""; position: absolute; inset: -40px; z-index: -1;
+  background: linear-gradient(rgba(8, 10, 16, .35), rgba(8, 10, 16, .65)), url(/screenshots/hero.png) 30% 40% / cover; filter: blur(5px) saturate(1.1);
+}
+.live-bar { position: absolute; inset: 0 0 auto; height: 28px; display: flex; justify-content: space-between; align-items: center; padding: 0 14px; background: #000; font-size: 12px; color: #ddd; }
+
+.pill { position: relative; z-index: 1; margin-top: 28px; height: 46px; padding: 0 16px; background: #000; display: flex; align-items: center; border-top-left-radius: 0 !important; border-top-right-radius: 0 !important; box-shadow: 0 20px 40px rgba(0, 0, 0, .4); }
+.pill-row { display: flex; align-items: center; gap: 14px; white-space: nowrap; font-size: 14px; }
+.pill .lead { display: flex; align-items: center; gap: 8px; }
+.pill .lead b { font-weight: 600; }
+.pill .cam { width: 64px; }
+.pill .trail { font-family: var(--mono); font-size: 13px; color: #cfcfd6; }
+.k-charge .trail, .g-charge { color: var(--green); }
+.g-charge { fill: var(--green); stroke: none; }
+.g-download { color: var(--blue); }
+.g-meeting { color: #ff9f0a; }
+.g-timer { color: #ff453a; }
+.g-timer .ring { stroke-dasharray: 1; stroke-dashoffset: .3; transform: rotate(-90deg); transform-origin: center; animation: tick 2.4s linear; }
+@keyframes tick { from { stroke-dashoffset: 0; } }
+@media (prefers-reduced-motion: reduce) { .g-timer .ring { animation: none; } }

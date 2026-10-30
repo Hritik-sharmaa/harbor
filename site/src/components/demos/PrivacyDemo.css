@@ -1,0 +1,11 @@
+.net-demo { padding: 24px; }
+.net { width: 100%; font-size: 13px; }
+.net-head { color: var(--muted); font-size: 12px; margin-bottom: 10px; }
+.net-row { display: flex; justify-content: space-between; gap: 12px; padding: 10px 12px; border-radius: 10px; border: 1px solid transparent; transition: background .3s, border-color .3s; }
+.net-row + .net-row { margin-top: 4px; }
+.net-row code { font-family: var(--mono); color: #d4d4de; }
+.net-row span { color: var(--muted); text-align: right; }
+.net-row.hit { background: rgba(59, 130, 246, .1); border-color: rgba(59, 130, 246, .35); }
+.net-row.hit code { color: #fff; }
+.net-row.off code { color: var(--muted); text-decoration: line-through; }
+.net-row.off span { color: var(--green); }

@@ -1,0 +1,23 @@
+.cust { display: grid; grid-template-columns: .85fr 1.15fr; gap: 56px; align-items: center; }
+@media (max-width: 900px) { .cust { grid-template-columns: 1fr; gap: 40px; } }
+
+.cust-tabs { display: grid; gap: 6px; }
+.cust-tabs button { position: relative; display: grid; gap: 4px; width: 100%; padding: 18px 22px; border-radius: 18px; text-align: left; color: var(--muted); transition: color .25s; }
+.cust-tabs button:hover { color: var(--text-2); }
+.cust-tabs button[aria-pressed="true"] { color: var(--text); }
+.cust-hl { position: absolute; inset: 0; border-radius: inherit; background: rgba(255, 255, 255, .045); box-shadow: inset 0 0 0 1px var(--line-2), 0 20px 40px rgba(0, 0, 0, .25); }
+.cust-tabs button > :not(.cust-hl) { position: relative; }
+.cust-name { font-family: var(--mono); font-size: 12px; letter-spacing: .12em; text-transform: uppercase; }
+.cust-tabs button[aria-pressed="true"] .cust-name { color: var(--blue); }
+.cust-tabs strong { font-family: var(--serif); font-size: 22px; font-weight: 500; letter-spacing: -.01em; }
+.cust-text { font-size: 15px; color: var(--text-2); display: none; }
+.cust-tabs button[aria-pressed="true"] .cust-text { display: block; }
+
+.settings-wrap { position: relative; perspective: 1800px; }
+.settings-glow { position: absolute; inset: 15% 10%; background: radial-gradient(closest-side, rgba(59, 130, 246, .45), rgba(236, 200, 150, .2), transparent); filter: blur(60px); }
+.settings {
+  position: relative; aspect-ratio: 820 / 640; padding: 8px; border-radius: 22px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, .13), rgba(255, 255, 255, .03)); border: 1px solid var(--line-2);
+  box-shadow: 0 50px 120px rgba(0, 0, 0, .55);
+}
+.settings img { position: absolute; inset: 8px; width: calc(100% - 16px); height: calc(100% - 16px); border-radius: 14px; }

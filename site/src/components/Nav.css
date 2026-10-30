@@ -1,0 +1,19 @@
+.notch-nav {
+  position: fixed; z-index: 50; top: 0; left: 50%; translate: -50% 0; max-width: calc(100% - 40px); height: 58px;
+  background: #000; border-radius: 0 0 22px 22px; transition: box-shadow .4s;
+}
+/* concave "ears" where the notch meets the top edge */
+.notch-nav::before, .notch-nav::after {
+  content: ""; position: absolute; top: 0; width: 16px; height: 16px; pointer-events: none;
+}
+.notch-nav::before { right: 100%; background: radial-gradient(circle at 0 100%, transparent 15.5px, #000 16px); }
+.notch-nav::after { left: 100%; background: radial-gradient(circle at 100% 100%, transparent 15.5px, #000 16px); }
+.notch-nav.down { box-shadow: 0 18px 50px rgba(0, 0, 0, .55), 0 0 0 1px rgba(255, 255, 255, .06); }
+
+.notch-inner { display: flex; align-items: center; gap: 22px; height: 100%; padding: 0 11px 0 20px; white-space: nowrap; overflow: hidden; }
+.brand { display: flex; align-items: center; gap: 9px; font-weight: 600; font-size: 15px; letter-spacing: -.01em; }
+.brand img { width: 24px; height: 24px; }
+.notch-nav nav { display: flex; gap: 2px; }
+.notch-nav nav a { padding: 6px 11px; border-radius: 999px; font-size: 14px; color: var(--text-2); transition: color .2s, background .2s; }
+.notch-nav nav a:hover { color: #fff; background: rgba(255, 255, 255, .08); }
+@media (max-width: 820px) { .notch-nav nav { display: none; } }
