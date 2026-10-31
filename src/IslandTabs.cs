@@ -330,7 +330,7 @@ namespace Harbor
                 if (y + 34 * S > c.Bottom) break;
                 var ring = new RectangleF(x1 + 2 * S, y + 6 * S, 22 * S, 22 * S);
                 using (var track = new Pen(Color.FromArgb(40, 255, 255, 255), 3 * S)) ui.G.DrawEllipse(track, ring);
-                using (var arc = new Pen(Color.FromArgb(255, 255, 179, 64), 3 * S)) ui.G.DrawArc(arc, ring, -90, 360 * (1 - t.Progress));
+                if ((1 - t.Progress) * 360 >= 1) using (var arc = new Pen(Color.FromArgb(255, 255, 179, 64), 3 * S)) ui.G.DrawArc(arc, ring, -90, 360 * (1 - t.Progress));
                 ui.Text(Timers.Text(t.Left), new RectangleF(x1 + 34 * S, y + 1 * S, 90 * S, 20 * S), f.Bold, t.Paused ? f.Dim : f.White);
                 ui.Text(t.Label + (t.Paused ? " · paused" : ""), new RectangleF(x1 + 34 * S, y + 18 * S, w1 - 100 * S, 16 * S), f.Small, f.Faint);
                 var cd = t;

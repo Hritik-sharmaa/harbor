@@ -410,7 +410,7 @@ namespace Harbor
             var ring = new RectangleF(cx - d / 2, c.Y + 2 * S, d, d);
             using (var track = new Pen(Color.FromArgb(38, 255, 255, 255), 7 * S)) ui.G.DrawEllipse(track, ring);
             float p = Pomodoro.Progress;
-            if (p > 0)
+            if (p * 360 >= 1) // GDI+ fails on a near-zero arc
                 using (var arc = new Pen(Pomodoro.Current == Pomodoro.Phase.Work ? Ember : Color.FromArgb(255, 100, 200, 160), 7 * S) { StartCap = LineCap.Round, EndCap = LineCap.Round })
                     ui.G.DrawArc(arc, ring, -90, 360 * p);
             var rem = Pomodoro.Remaining;
@@ -686,135 +686,6 @@ namespace Harbor
             keepAwake = !keepAwake;
             // ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_DISPLAY_REQUIRED while on; ES_CONTINUOUS alone clears it
             SetThreadExecutionState(keepAwake ? 0x80000003u : 0x80000000u);
-        }
-
-        /// <summary>
-        /// Three calm widgets (Up next, Focus, Weather), each a caption and one big thing, over one slim strip
-        /// with your most-used apps and the quick toggles.
-        /// </summary>
-        void DashboardTab(UI ui, RectangleF c, Fonts2 f)
-        {
-            float gap = 12 * S, cw = (c.Width - 2 * gap) / 3, stripH = 50 * S, topH = c.Height - stripH - gap;
-            var up = new RectangleF(c.X, c.Y, cw, topH);
-            var focus = new RectangleF(c.X + cw + gap, c.Y, cw, topH);
-            var wx = new RectangleF(c.X + 2 * (cw + gap), c.Y, cw, topH);
-            var strip = new RectangleF(c.X, c.Bottom - stripH, c.Width, stripH);
-            foreach (var r in new[] { up, focus, wx, strip }) GlassShape(ui, r, 18 * S, 9, 18);
-            float ip = 16 * S;
-            var now = DateTime.Now;
-
-            // ---- up next (reminders)
-            Caption(ui, up, ip, "UP NEXT", f);
-            var open = Reminders.Open();
-            // the next meeting today comes first, with Join
-            var meet = CalendarFeed.Next();
-            if (meet != null && meet.Start.Date != now.Date) meet = null;
-            int maxRem = meet != null ? 2 : 3;
-            if (meet != null) UpNextMeeting(ui, new RectangleF(up.X + ip, up.Y + 36 * S, cw - 2 * ip, 21 * S), meet, f);
-            if (open.Count == 0 && meet == null)
-            {
-                using (var gf = new Font(Fonts.Icons, 15f * S, GraphicsUnit.Pixel))
-                using (var gb = new SolidBrush(Color.FromArgb(255, 48, 209, 88)))
-                    ui.Glyph("", new RectangleF(up.X + ip - 2 * S, up.Y + 38 * S, 22 * S, 26 * S), gf, gb);
-                ui.Text("All caught up", new RectangleF(up.X + ip + 24 * S, up.Y + 38 * S, cw - 2 * ip - 24 * S, 26 * S), f.Title, f.White);
-            }
-            float y = up.Y + 36 * S + (meet != null ? 25 * S : 0);
-            for (int i = 0; i < open.Count && i < maxRem; i++)
-            {
-                var it = open[i];
-                string id = "dr" + it.Id;
-                var tick = new RectangleF(up.X + ip, y + 3 * S, 15 * S, 15 * S);
-                TickCircle(ui, tick, false, Hover == id);
-                ui.AddHit(id, RectangleF.Inflate(tick, 5 * S, 5 * S), () => Reminders.Toggle(it), true);
-                string due = Reminders.DueText(it);
-                float dw = due != null ? ui.G.MeasureString(due, f.Small).Width + 4 * S : 0;
-                ui.Text(it.Text, new RectangleF(tick.Right + 9 * S, y, cw - 2 * ip - 24 * S - dw, 21 * S), f.Body, f.White);
-                if (due != null)
-                    using (var db = new SolidBrush(Reminders.Overdue(it) ? Color.FromArgb(255, 255, 105, 97) : NowPlayingView.Faint))
-                        ui.Text(due, new RectangleF(up.X + ip, y, cw - 2 * ip, 21 * S), f.Small, db, 2);
-                y += 25 * S;
-            }
-            var add = new RectangleF(up.X + ip - 6 * S, up.Bottom - 30 * S, 110 * S, 22 * S);
-            if (Hover == "dadd") ui.Fill(add, Color.FromArgb(22, 255, 255, 255), 11 * S);
-            ui.Text("+  Add reminder", new RectangleF(add.X + 6 * S, add.Y, add.Width, add.Height), f.Small, Hover == "dadd" ? f.White : f.Faint);
-            ui.AddHit("dadd", add, () => { SetTab("reminders", false); FocusField = "rem"; Activate(); N.SetForegroundWindow(Handle); }, true);
-            if (open.Count > maxRem) ui.Text("+" + (open.Count - maxRem) + " more", new RectangleF(up.X + ip, up.Bottom - 30 * S, cw - 2 * ip, 22 * S), f.Small, f.Faint, 2);
-
-            // ---- focus (Pomodoro + how much of the day is left)
-            Caption(ui, focus, ip, Pomodoro.Running ? Pomodoro.Name(Pomodoro.Current).ToUpperInvariant() : "FOCUS", f);
-            var rem = Pomodoro.Remaining;
-            ui.Text(((int)rem.TotalMinutes).ToString("00") + ":" + rem.Seconds.ToString("00"), new RectangleF(focus.X + ip, focus.Y + 30 * S, 120 * S, 36 * S), f.Big, f.White);
-            ui.Text(Pomodoro.Running ? "Focusing" : (Pomodoro.Progress > 0 ? "Paused" : "Ready"), new RectangleF(focus.X + ip, focus.Y + 64 * S, 120 * S, 16 * S), f.Small, f.Dim);
-            using (var big = new Font(Fonts.Icons, 13f * S, GraphicsUnit.Pixel))
-            using (var dark = new SolidBrush(Color.FromArgb(235, 18, 18, 22)))
-                RoundBtn(ui, "dpomo", new PointF(focus.Right - ip - 17 * S, focus.Y + 54 * S), 17 * S, Pomodoro.Running ? "" : "", Pomodoro.Toggle, big, dark, true);
-            int start = Math.Max(0, Math.Min(23, Look.Int("DayStart"))), end = Math.Max(start + 1, Math.Min(24, Look.Int("DayEnd")));
-            float frac = (float)Math.Max(0, Math.Min(1, (now - now.Date.AddHours(start)).TotalHours / (end - start)));
-            var bar = new RectangleF(focus.X + ip, focus.Bottom - 18 * S, cw - 2 * ip, 4 * S);
-            ui.Fill(bar, Color.FromArgb(34, 255, 255, 255), 2 * S);
-            ui.Fill(new RectangleF(bar.X, bar.Y, Math.Max(4 * S, bar.Width * frac), bar.Height), Ember, 2 * S);
-            string dayText = frac >= 1 ? "Day's done" : frac <= 0 ? "Day starts at " + start + ":00" : "Day " + (int)Math.Round(frac * 100) + "%";
-            ui.Text(dayText, new RectangleF(focus.X + ip, bar.Y - 19 * S, cw - 2 * ip, 16 * S), f.Small, f.Faint);
-            if (frac > 0 && frac < 1) ui.Text("until " + end + ":00", new RectangleF(focus.X + ip, bar.Y - 19 * S, cw - 2 * ip, 16 * S), f.Small, f.Faint, 2);
-
-            // ---- weather (or Claude, until a city is set)
-            var w = Weather.HasCity ? Weather.Now : null;
-            if (Weather.HasCity) Weather.Ensure();
-            if (w != null)
-            {
-                Caption(ui, wx, ip, Weather.Place.Split(',')[0].ToUpperInvariant(), f);
-                WeatherIcons.Draw(ui.G, new RectangleF(wx.X + ip - 4 * S, wx.Y + 32 * S, 40 * S, 40 * S), w.Code, w.Day);
-                ui.Text(Math.Round(w.Temp) + "°", new RectangleF(wx.X + ip + 42 * S, wx.Y + 30 * S, 100 * S, 36 * S), f.Big, f.White);
-                ui.Text(Weather.Describe(w.Code), new RectangleF(wx.X + ip, wx.Y + 76 * S, cw - 2 * ip, 18 * S), f.Body, f.Dim);
-                ui.Text("H " + Math.Round(w.High) + "°   L " + Math.Round(w.Low) + "°", new RectangleF(wx.X + ip, wx.Bottom - 26 * S, cw - 2 * ip, 16 * S), f.Small, f.Faint);
-            }
-            else
-            {
-                Caption(ui, wx, ip, "AI CODING", f);
-                int active = 0;
-                foreach (var s in ClaudeBridge.Sessions.Values) if ((s.Status == "Running" || s.Status == "Waiting") && (now - s.Updated).TotalMinutes < 30) active++;
-                bool asking = ClaudeBridge.Pending.Count > 0;
-                ui.Text(asking ? "Needs you" : active > 0 ? active + " active" : "All quiet", new RectangleF(wx.X + ip, wx.Y + 32 * S, cw - 2 * ip, 34 * S), f.Big, f.White);
-                ui.Text(asking ? "Claude is waiting for an answer" : active > 0 ? "Claude is working" : "No sessions running", new RectangleF(wx.X + ip, wx.Y + 70 * S, cw - 2 * ip, 18 * S), f.Small, f.Dim);
-                if (!Weather.HasCity) ui.Text("Set a city in Harbor for weather", new RectangleF(wx.X + ip, wx.Bottom - 26 * S, cw - 2 * ip, 16 * S), f.Small, f.Faint);
-            }
-
-            // ---- one slim strip: most-used apps on the left, quick toggles on the right
-            var apps = new List<string>();
-            foreach (var a in ScreenTime.Today()) if (a.Icon != null && apps.Count < 6) apps.Add(a.Icon);
-            foreach (var p in Settings.Pinned) if (apps.Count < 6 && !apps.Contains(p)) apps.Add(p);
-            float isz = 26 * S, ax = strip.X + ip, ay = strip.Y + (stripH - isz) / 2;
-            for (int i = 0; i < apps.Count; i++)
-            {
-                var r = new RectangleF(ax + i * (isz + 12 * S), ay, isz, isz);
-                string id = "la" + i, path = apps[i];
-                if (Hover == id) ui.Fill(RectangleF.Inflate(r, 5 * S, 5 * S), Color.FromArgb(28, 255, 255, 255), 9 * S);
-                var ic = IconFor(path, 26);
-                if (ic != null) ui.G.DrawImage(ic, r);
-                ui.AddHit(id, RectangleF.Inflate(r, 5 * S, 5 * S), () => Launcher.Open(path));
-            }
-
-            var ids = new List<string>(); var glyphs = new List<string>(); var ons = new List<bool>(); var acts = new List<Action>();
-            ids.Add("qfocus"); glyphs.Add("\uE708"); ons.Add(FocusMode.On); acts.Add(FocusMode.Toggle);
-            ids.Add("qdark"); glyphs.Add("\uE793"); ons.Add(Theme.UserDark); acts.Add(ControlCenter.ToggleDarkMode);
-            if (Radios.HasWifi) { ids.Add("qwifi"); glyphs.Add(""); ons.Add(Radios.WifiOn); acts.Add(() => Radios.SetWifi(!Radios.WifiOn)); }
-            if (Radios.HasBt) { ids.Add("qbt"); glyphs.Add(""); ons.Add(Radios.BtOn); acts.Add(() => Radios.SetBluetooth(!Radios.BtOn)); }
-            ids.Add("qawake"); glyphs.Add(""); ons.Add(keepAwake); acts.Add(ToggleKeepAwake);
-            ids.Add("qshot"); glyphs.Add(""); ons.Add(false); acts.Add(() => { CloseFlyout(); Launcher.Run("ms-screenclip:"); });
-            ids.Add("qlock"); glyphs.Add(""); ons.Add(false); acts.Add(() => N.LockWorkStation());
-            float tsz = 30 * S, tgap = 8 * S, tx = strip.Right - ip - ids.Count * tsz - (ids.Count - 1) * tgap;
-            using (var pen = new Pen(Color.FromArgb(26, 255, 255, 255), 1)) ui.G.DrawLine(pen, tx - 14 * S, strip.Y + 12 * S, tx - 14 * S, strip.Bottom - 12 * S);
-            using (var gf = new Font(Fonts.Icons, 12f * S, GraphicsUnit.Pixel))
-            using (var dark = new SolidBrush(Color.FromArgb(235, 18, 18, 22)))
-                for (int i = 0; i < ids.Count; i++)
-                {
-                    var r = new RectangleF(tx + i * (tsz + tgap), strip.Y + (stripH - tsz) / 2, tsz, tsz);
-                    using (var bg = new SolidBrush(ons[i] ? Color.FromArgb(Hover == ids[i] ? 255 : 232, 255, 255, 255) : Color.FromArgb(Hover == ids[i] ? 54 : 26, 255, 255, 255)))
-                        ui.G.FillEllipse(bg, r);
-                    ui.Glyph(glyphs[i], r, gf, ons[i] ? (Brush)dark : f.Dim);
-                    var act = acts[i];
-                    ui.AddHit(ids[i], r, () => act(), true);
-                }
         }
 
         /// <summary>The small, faint caption at the top of a widget.</summary>

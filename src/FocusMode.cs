@@ -46,6 +46,8 @@ namespace Harbor
         {
             if (!On) return;
             On = false;
+            // ended by hand: the work session Focus started stops too (it doesn't keep counting in the menu bar)
+            if (!finished && withPomodoro && Pomodoro.Current == Pomodoro.Phase.Work) Pomodoro.Reset();
             Fire();
             if (held > 0)
                 Banners.ShowLocal("Focus", finished ? "Focus session done" : "Focus ended",

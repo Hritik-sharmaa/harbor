@@ -280,7 +280,8 @@ namespace Harbor
             m.Sep();
             m.Add("Lock Screen", () => N.LockWorkStation());
             m.Add("Log Out…", () => { if (TopBar.Confirm("Are you sure you want to sign out?")) Launcher.Run("shutdown.exe", "/l"); });
-            m.ShowBelow(bar, ZoneOf("cc"), "cc");
+            // its own id: Control Center has just closed under this click, and reopening "cc" right away counts as a toggle
+            m.ShowBelow(bar, ZoneOf("cc"), "ccpower");
         }
     }
 }

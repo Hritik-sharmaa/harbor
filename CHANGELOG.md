@@ -1,5 +1,22 @@
 # Changelog
 
+## 0.3.1 — 2026-10-31 (preview)
+
+**New Dashboard design**
+- **A big card that follows your day:**
+  - a meeting starting within 30 minutes (red, with Join meeting)
+  - a running Pomodoro (ember; green on breaks) or timer, with a large ring and play/pause
+  - the song playing, in the album's colours
+  - otherwise a greeting with today's date, coloured for the time of day (morning blue, afternoon amber, evening violet, night navy), what today holds, and a day-progress bar
+- **Weather painted like the sky outside:** blue when clear, grey under clouds, blue-grey with rain streaks, navy at night.
+- **Up next** lists your next meeting, running timers and reminders together, with a count.
+- **Quick toggles light up in their own colour when on:** Focus and dark mode in indigo, Wi‑Fi and Bluetooth in blue, keep awake in amber.
+
+**Fixed**
+- The small progress rings (menu bar, Pomodoro, timers) could throw an error just as a session started, while the arc was almost zero, and stop that redraw.
+- The Power button in Control Center did nothing. Its menu (Sleep, Restart, Shut Down, Lock Screen, Log Out) opens in the spot Control Center had just closed from, which Harbor took as a second click on the Control Center icon and ignored.
+- Turning Focus off left the Pomodoro session it had started running in the menu bar. Ending Focus yourself now stops that session too; when the session finishes on its own, Focus ends with it as before.
+
 ## 0.3.0 — 2026-10-29 (preview)
 
 **New in the notch**

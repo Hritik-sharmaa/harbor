@@ -227,7 +227,7 @@ namespace Harbor
             cardTop = -1;
         }
 
-        public const string Version = "0.3.0";
+        public const string Version = "0.3.1";
         public const string RepoUrl = "https://github.com/hritik-sharmaa/harbor";
         static readonly string[] pageInfo =
         {

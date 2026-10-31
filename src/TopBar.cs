@@ -547,7 +547,7 @@ namespace Harbor
                         // a tiny progress ring, then the time left
                         float rd = 11 * S, rx = pomo.R.X + 8 * S, ry = iy + ih / 2 - rd / 2;
                         using (var tp = new Pen(Color.FromArgb(60, text), 2 * S)) g.DrawEllipse(tp, rx, ry, rd, rd);
-                        using (var ap = new Pen(ringColor, 2 * S)) if (prog > 0) g.DrawArc(ap, rx, ry, rd, rd, -90, 360 * prog);
+                        using (var ap = new Pen(ringColor, 2 * S)) if (prog * 360 >= 1) g.DrawArc(ap, rx, ry, rd, rd, -90, 360 * prog);
                     }
                     g.DrawString(pomoText, small, Pomodoro.Running || timer != null ? brush : dim, new RectangleF(pomo.R.X + 24 * S, iy + 0.5f * S, pomo.R.Width - 28 * S, ih), lf);
                 }
