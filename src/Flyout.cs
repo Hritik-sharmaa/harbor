@@ -80,6 +80,9 @@ namespace Harbor
         /// <summary>The island paints its own glass and notch shape.</summary>
         protected virtual bool OwnGlass { get { return false; } }
 
+        /// <summary>Drawn dark whatever the theme (the island is black, like a real notch). Every other panel follows light/dark.</summary>
+        protected virtual bool AlwaysDark { get { return false; } }
+
         /// <summary>Clips the window to its shape: a rounded rectangle (the island overrides this with its notch).</summary>
         protected virtual void ApplyShape()
         {
@@ -88,23 +91,25 @@ namespace Harbor
             N.SetWindowRgn(Handle, N.CreateRoundRectRgn(0, 0, W + 1, H + 1, r * 2, r * 2), true);
         }
 
-        /// <summary>Dark frosted glass: the blurred desktop shows through, with a soft sheen across the top.</summary>
+        /// <summary>Frosted glass (dark or light with the theme), with a soft sheen across the top.</summary>
         void PaintGlass(Graphics g, float w, float h)
         {
             var all = new RectangleF(0, 0, w, h);
-            using (var br = new LinearGradientBrush(new RectangleF(0, -2, w, h + 4), Color.FromArgb(acrylic ? 150 : 252, 28, 28, 34), Color.FromArgb(acrylic ? 205 : 252, 10, 10, 13), 90f))
+            Color top = Theme.Dark ? Color.FromArgb(acrylic ? 150 : 252, 28, 28, 34) : Color.FromArgb(acrylic ? 170 : 252, 248, 248, 251);
+            Color bottom = Theme.Dark ? Color.FromArgb(acrylic ? 205 : 252, 10, 10, 13) : Color.FromArgb(acrylic ? 215 : 252, 234, 234, 239);
+            using (var br = new LinearGradientBrush(new RectangleF(0, -2, w, h + 4), top, bottom, 90f))
                 g.FillRectangle(br, all);
             // gradients overshoot the area they fill: GDI+ wraps them at the edge, which drew a bright line there
-            using (var sheen = new LinearGradientBrush(new RectangleF(0, -2, w, Math.Min(h, 220 * S) * 0.5f + 8), Color.FromArgb(28, 255, 255, 255), Color.FromArgb(0, 255, 255, 255), 90f))
+            using (var sheen = new LinearGradientBrush(new RectangleF(0, -2, w, Math.Min(h, 220 * S) * 0.5f + 8), Color.FromArgb(Theme.Dark ? 28 : 120, 255, 255, 255), Color.FromArgb(0, 255, 255, 255), 90f))
                 g.FillRectangle(sheen, 0, 0, w, Math.Min(h, 220 * S) * 0.5f);
         }
 
-        /// <summary>The light rim around the panel's edge, brightest at the top where the light catches it.</summary>
+        /// <summary>The rim around the panel's edge: light on dark glass (brightest at the top), a soft grey line on light glass.</summary>
         void PaintRim(Graphics g, float w, float h)
         {
             float r = GlassRadius * S, inset = 0.75f * S;
             using (var p = Gfx.RoundRect(new RectangleF(inset, inset, w - 2 * inset, h - 2 * inset), r - inset))
-            using (var b = new LinearGradientBrush(new RectangleF(0, -2, w, h + 4), Color.FromArgb(60, 255, 255, 255), Color.FromArgb(22, 255, 255, 255), 90f))
+            using (var b = new LinearGradientBrush(new RectangleF(0, -2, w, h + 4), Theme.Dark ? Color.FromArgb(60, 255, 255, 255) : Color.FromArgb(34, 0, 0, 0), Theme.Dark ? Color.FromArgb(22, 255, 255, 255) : Color.FromArgb(56, 0, 0, 0), 90f))
             using (var pen = new Pen(b, 1.1f * S))
                 g.DrawPath(pen, p);
         }
@@ -234,6 +239,14 @@ namespace Harbor
             surf.Ensure(W, Math.Max(maxH, contentH) + 2);
             var g = surf.G;
             g.ResetTransform();
+            bool userDark = Theme.Dark;
+            if (AlwaysDark) Theme.Dark = true;
+            try { Paint(g, place, maxH); }
+            finally { Theme.Dark = userDark; }
+        }
+
+        void Paint(Graphics g, bool place, int maxH)
+        {
             bool glass = !WindowMode && !OwnGlass;
             g.Clear(acrylic ? Color.Transparent : Theme.PanelSolid);
             g.SmoothingMode = SmoothingMode.AntiAlias;
@@ -243,12 +256,9 @@ namespace Harbor
             if (glass) PaintGlass(g, W, glassH > 0 ? glassH : maxH); // fixed behind the content: it doesn't scroll
             g.TranslateTransform(0, -scroll);
             hits.Clear();
-            // panels (and the Harbor app) are dark glass, like the island: draw them with the dark palette whatever the Windows theme
-            bool userDark = Theme.Dark;
-            Theme.Dark = true; // Harbor's panels and its app window are always dark glass
             var ui = new UI(this, g, S, W, hits);
             try { Build(ui); }
-            finally { ui.Dispose(); Theme.Dark = userDark; }
+            finally { ui.Dispose(); }
             g.ResetTransform();
             int newContent = (int)Math.Ceiling(ui.Y + 8 * S);
             int newH = FixedLogicalHeight > 0 ? (int)Math.Round(FixedLogicalHeight * S) : Math.Min(maxH, newContent);
@@ -472,9 +482,19 @@ namespace Harbor
 
         public void Glyph(string glyph, RectangleF r, Font font, Brush b) { Text(glyph, r, font, b, 1); }
 
-        /// <summary>A glass tile (the island's look): a light tint, a sheen over its top half, and a hairline edge brighter at the top.</summary>
+        /// <summary>A glass tile (the island's look): a light tint, a sheen over its top half, and a hairline edge brighter at the top.
+        /// On light glass it's a whiter, near-solid tile with a soft grey edge.</summary>
         public void Glass(RectangleF r, float radius, int fill = 12, int edge = 26)
         {
+            if (!Theme.Dark)
+            {
+                using (var p = Gfx.RoundRect(r, radius))
+                {
+                    using (var b = new SolidBrush(Color.FromArgb(Math.Min(255, 120 + fill * 4), 255, 255, 255))) G.FillPath(b, p);
+                    using (var pen = new Pen(Color.FromArgb(Math.Min(60, 14 + edge / 2), 0, 0, 0), 1f * S)) G.DrawPath(pen, p);
+                }
+                return;
+            }
             using (var p = Gfx.RoundRect(r, radius))
             {
                 using (var b = new SolidBrush(Color.FromArgb(fill, 255, 255, 255))) G.FillPath(b, p);
@@ -493,6 +513,14 @@ namespace Harbor
         {
             using (var br = new SolidBrush(c))
             using (var p = Gfx.RoundRect(r, radius)) G.FillPath(br, p);
+        }
+
+        /// <summary>A hairline around a slider's track on light glass, where its white fill would vanish into the panel.</summary>
+        public void TrackEdge(RectangleF t, float radius)
+        {
+            if (Theme.Dark) return;
+            using (var pen = new Pen(Color.FromArgb(30, 0, 0, 0), 1f))
+            using (var p = Gfx.RoundRect(t, radius)) G.DrawPath(pen, p);
         }
 
         /// <summary>Bold title with an optional switch on the right.</summary>
@@ -603,6 +631,7 @@ namespace Harbor
             Fill(t, Theme.Track, rad);
             float fw = t.Height + (t.Width - t.Height) * v;
             Fill(new RectangleF(t.X, t.Y, fw, t.Height), Theme.TrackFill, rad);
+            TrackEdge(t, rad);
             var kr = new RectangleF(t.X + fw - t.Height, t.Y, t.Height, t.Height);
             using (var br = new SolidBrush(Color.White)) G.FillEllipse(br, kr);
             using (var pen = new Pen(Color.FromArgb(40, 0, 0, 0), 1)) G.DrawEllipse(pen, kr);
@@ -779,6 +808,7 @@ namespace Harbor
             Color bg = primary ? Theme.Accent : (f.Hover == id ? Theme.TileHover : Theme.Tile);
             if (primary && f.Hover == id) bg = Gfx.Lighten(Theme.Accent, 0.12f);
             Fill(r, bg, 8 * S);
+            if (!primary && !Theme.Dark) using (var pen = new Pen(Theme.TileBorder, 1f)) using (var p = Gfx.RoundRect(r, 8 * S)) G.DrawPath(pen, p);
             using (var b = new SolidBrush(primary ? Color.White : Theme.Text)) Text(text, r, Bold, b, 1);
             AddHit(id, r, act, keep);
             Y += 36 * S;

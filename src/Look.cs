@@ -144,6 +144,24 @@ namespace Harbor
             }
         }
 
-        public static Color BarText { get { return Color("BarTextColor", Theme.Text); } }
+        /// <summary>True when the bar looks dark: its own colour (if you picked one) laid over the theme's, at its opacity.
+        /// "Auto" text and borders follow this, so a black bar keeps white text in light mode (and a white bar dark text).</summary>
+        public static bool BarDark { get { return LooksDark("BarColor", "BarOpacity"); } }
+        public static bool DockDark { get { return LooksDark("DockColor", "DockOpacity"); } }
+
+        static bool LooksDark(string colorKey, string opacityKey)
+        {
+            Color c;
+            if (!TryParse(Get(colorKey), out c)) return Theme.Dark;
+            float a = Math.Max(0, Math.Min(100, Int(opacityKey))) / 100f;
+            float under = Theme.Dark ? 30 : 240; // roughly what shows through: the blurred desktop, toned by the theme
+            float lum = (0.299f * c.R + 0.587f * c.G + 0.114f * c.B) * a + under * (1 - a);
+            return lum < 140;
+        }
+
+        public static Color BarText
+        {
+            get { return Color("BarTextColor", BarDark ? System.Drawing.Color.FromArgb(242, 255, 255, 255) : System.Drawing.Color.FromArgb(230, 0, 0, 0)); }
+        }
     }
 }

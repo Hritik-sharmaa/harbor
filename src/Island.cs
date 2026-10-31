@@ -194,6 +194,7 @@ namespace Harbor
 
         /// <summary>Clips the window to the notch: square where it meets the menu bar, round at the bottom, 'reveal' of its height.</summary>
         protected override bool OwnGlass { get { return true; } }
+        protected override bool AlwaysDark { get { return true; } }
 
         protected override void ApplyShape()
         {

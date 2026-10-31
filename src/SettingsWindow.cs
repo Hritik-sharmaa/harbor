@@ -92,6 +92,9 @@ namespace Harbor
         // ---- helpers bound to settings ------------------------------------------------
 
         static void Live() { App.ApplyLive(); }
+
+        /// <summary>Redraws the window if it's open (the theme changed).</summary>
+        public static void Repaint() { if (inst != null && inst.Visible) inst.Refresh2(); }
         static void Full() { App.ApplySettings(); }
 
         bool weatherBusy;
@@ -176,21 +179,26 @@ namespace Harbor
         // Rows are drawn immediately, so each card's background is painted from the previous frame's
         // measurements; when the layout changes we simply render once more.
         Bitmap backdrop;
+        bool backdropDark;
 
-        /// <summary>The window's background, drawn once per size: deep dark, with a soft blue glow top right and violet bottom left.</summary>
+        /// <summary>The window's background, drawn once per size and theme: deep dark (or soft white in light mode),
+        /// with a blue glow top right and violet bottom left.</summary>
         Bitmap Backdrop(int w, int h)
         {
-            if (backdrop != null && backdrop.Width == w && backdrop.Height == h) return backdrop;
+            bool dark = Theme.Dark;
+            if (backdrop != null && backdrop.Width == w && backdrop.Height == h && backdropDark == dark) return backdrop;
             if (backdrop != null) backdrop.Dispose();
+            backdropDark = dark;
             backdrop = new Bitmap(w, h, System.Drawing.Imaging.PixelFormat.Format32bppPArgb);
             using (var g = Graphics.FromImage(backdrop))
             {
                 g.SmoothingMode = SmoothingMode.AntiAlias;
-                using (var br = new LinearGradientBrush(new RectangleF(0, -2, w, h + 4), Color.FromArgb(255, 24, 25, 33), Color.FromArgb(255, 11, 11, 15), 90f))
+                using (var br = new LinearGradientBrush(new RectangleF(0, -2, w, h + 4),
+                    dark ? Color.FromArgb(255, 24, 25, 33) : Color.FromArgb(255, 247, 247, 251), dark ? Color.FromArgb(255, 11, 11, 15) : Color.FromArgb(255, 232, 233, 240), 90f))
                     g.FillRectangle(br, 0, 0, w, h);
-                Glow(g, new RectangleF(w * 0.45f, -h * 0.55f, w * 0.9f, h * 1.0f), Color.FromArgb(70, 60, 120, 255));
-                Glow(g, new RectangleF(-w * 0.2f, h * 0.45f, w * 0.75f, h * 0.9f), Color.FromArgb(48, 150, 90, 255));
-                using (var sheen = new LinearGradientBrush(new RectangleF(0, -2, w, h * 0.35f + 8), Color.FromArgb(14, 255, 255, 255), Color.FromArgb(0, 255, 255, 255), 90f))
+                Glow(g, new RectangleF(w * 0.45f, -h * 0.55f, w * 0.9f, h * 1.0f), dark ? Color.FromArgb(70, 60, 120, 255) : Color.FromArgb(46, 90, 150, 255));
+                Glow(g, new RectangleF(-w * 0.2f, h * 0.45f, w * 0.75f, h * 0.9f), dark ? Color.FromArgb(48, 150, 90, 255) : Color.FromArgb(34, 170, 110, 255));
+                using (var sheen = new LinearGradientBrush(new RectangleF(0, -2, w, h * 0.35f + 8), Color.FromArgb(dark ? 14 : 90, 255, 255, 255), Color.FromArgb(0, 255, 255, 255), 90f))
                     g.FillRectangle(sheen, 0, 0, w, h * 0.35f);
             }
             return backdrop;
@@ -227,7 +235,7 @@ namespace Harbor
             cardTop = -1;
         }
 
-        public const string Version = "0.3.1";
+        public const string Version = "0.3.2";
         public const string RepoUrl = "https://github.com/hritik-sharmaa/harbor";
         static readonly string[] pageInfo =
         {
@@ -247,7 +255,7 @@ namespace Harbor
             var g = ui.G;
             float sw = SidebarW * S, W = LogicalWidth * S;
 
-            // ---- background (fixed): deep dark with a soft blue and violet glow, like the island's glass
+            // ---- background (fixed): deep dark (or soft white) with a blue and violet glow
             var keep = g.Transform;
             g.ResetTransform();
             g.DrawImage(Backdrop((int)W, (int)(FixedLogicalHeight * S) + 2), 0, 0);
@@ -289,8 +297,8 @@ namespace Harbor
             // frosted sidebar: a lighter pane over the glow, with a hairline edge
             float fh = FixedLogicalHeight * S + 2;
             g.DrawImage(Backdrop((int)W, (int)fh), new RectangleF(0, 0, sw, fh), new RectangleF(0, 0, sw, fh), GraphicsUnit.Pixel);
-            using (var br = new SolidBrush(Color.FromArgb(14, 255, 255, 255))) g.FillRectangle(br, 0, 0, sw, fh);
-            using (var pen = new Pen(Color.FromArgb(24, 255, 255, 255), 1)) g.DrawLine(pen, sw - 0.5f, 0, sw - 0.5f, fh);
+            using (var br = new SolidBrush(Theme.Dark ? Color.FromArgb(14, 255, 255, 255) : Color.FromArgb(110, 255, 255, 255))) g.FillRectangle(br, 0, 0, sw, fh);
+            using (var pen = new Pen(Theme.Dark ? Color.FromArgb(24, 255, 255, 255) : Color.FromArgb(26, 0, 0, 0), 1)) g.DrawLine(pen, sw - 0.5f, 0, sw - 0.5f, fh);
             if (appIcon != null) g.DrawImage(appIcon, new RectangleF(20 * S, 22 * S, 34 * S, 34 * S));
             using (var tf = new Font(Fonts.UiBold, 17f * S, GraphicsUnit.Pixel))
                 ui.Text("Harbor", new RectangleF(62 * S, 19 * S, sw - 70 * S, 24 * S), tf, ui.TextBrush);
@@ -302,7 +310,7 @@ namespace Harbor
                 string id = "nav" + i;
                 // the current page: a glossy glass pill with its icon in the accent colour
                 if (i == page) ui.Glass(r, 10 * S, 26, 40);
-                else if (Hover == id) ui.Fill(r, Color.FromArgb(14, 255, 255, 255), 10 * S);
+                else if (Hover == id) ui.Fill(r, Theme.Dark ? Color.FromArgb(14, 255, 255, 255) : Color.FromArgb(14, 0, 0, 0), 10 * S);
                 using (var accent = new SolidBrush(Theme.Accent))
                     ui.Glyph(pageGlyphs[i], new RectangleF(r.X + 8 * S, r.Y, 24 * S, r.Height), ui.Icon, i == page ? (Brush)accent : ui.DimBrush);
                 ui.Text(pages[i], new RectangleF(r.X + 42 * S, r.Y, r.Width - 46 * S, r.Height), i == page ? ui.Bold : ui.Body, ui.TextBrush);

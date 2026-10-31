@@ -249,7 +249,7 @@ namespace Harbor
                 {
                     if (p != null) g.FillPath(br, p); else g.FillRectangle(br, r);
                 }
-                var bc = Look.WithOpacity(Theme.Dark ? Color.White : Color.Black, "BarBorderOpacity");
+                var bc = Look.WithOpacity(Look.BarDark ? Color.White : Color.Black, "BarBorderOpacity");
                 if (bc.A > 0)
                     using (var pen = new Pen(bc, 1f))
                     {

@@ -1,5 +1,15 @@
 # Changelog
 
+## 0.3.2 — 2026-10-31 (preview)
+
+**Light mode everywhere**
+- **Panels follow light mode:** Control Center, Wi‑Fi, Bluetooth, Sound, Calendar, Battery, the menus, Notification Center, the System panel and the Harbor window used to stay dark whatever the theme. They are now frosted white with dark text in light mode. The notch stays black, like a real one.
+- **Switching is instant:** changing the theme in Harbor, in Windows Settings, or with the dark-mode button in Control Center redraws open panels right away.
+- Sliders and buttons have a soft outline on light glass, so they don't vanish into the white panel.
+
+**Fixed**
+- **Menu bar text vanished in light mode** when the bar had its own dark colour (for example black at 100%): "Auto" text followed the theme and turned black on black. Auto text and borders now follow how dark the bar actually is, and the dock's open-app dots and divider do the same.
+
 ## 0.3.1 — 2026-10-31 (preview)
 
 **New Dashboard design**

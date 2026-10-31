@@ -770,7 +770,7 @@ namespace Harbor
                         float cx = (float)Math.Round((it.SlotL + it.SlotR) / 2f) + 0.5f;
                         var a = MapP(cx, panelTop + off + padTop + 2 * S);
                         var b = MapP(cx, panelTop + off + panelH - padBottom + 1 * S);
-                        using (var pen = new Pen(Theme.Separator, Math.Max(1f, S))) g.DrawLine(pen, a, b);
+                        using (var pen = new Pen(Look.DockDark ? Color.FromArgb(70, 255, 255, 255) : Color.FromArgb(60, 0, 0, 0), Math.Max(1f, S))) g.DrawLine(pen, a, b);
                         continue;
                     }
                     if (dragging && it == dragItem) continue;
@@ -781,7 +781,7 @@ namespace Harbor
                     {
                         float r = Math.Max(1.5f, 2f * S);
                         var c = MapP(it.X + it.Size / 2f, panelTop + off + panelH - padBottom / 2f + 0.5f * S);
-                        using (var br = new SolidBrush(Theme.Dot))
+                        using (var br = new SolidBrush(Look.DockDark ? Color.FromArgb(220, 235, 235, 235) : Color.FromArgb(200, 30, 30, 30)))
                             g.FillEllipse(br, c.X - r, c.Y - r, r * 2, r * 2);
                     }
                     if (Look.Bool("DockBadges")) DrawBadge(g, it, ir);

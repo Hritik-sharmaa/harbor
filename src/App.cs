@@ -331,6 +331,7 @@ namespace Harbor
                 {
                     Settings.Save();
                     Theme.Refresh();
+                    RepaintPanels();
                     SysInfo.Apply();
                     RegisterHotkeys();
                     Banners.Apply();
@@ -349,6 +350,7 @@ namespace Harbor
         {
             Settings.Save();
             Theme.Refresh();
+            RepaintPanels();
             Taskbar.Apply(Settings.HideTaskbar);
             ScheduleRelayoutAfter(1500);
             Autostart.Sync();
@@ -452,10 +454,28 @@ namespace Harbor
             foreach (var d in Displays) d.Dock.Rebuild();
         }
 
+        static System.Windows.Forms.Timer themeTimer;
+
         public static void OnThemeChanged()
+        {
+            Repaint();
+            // Windows can broadcast the change before it has written the new mode: look again once it settles
+            if (themeTimer == null) themeTimer = OneShot(800, () => { bool was = Theme.Dark; Theme.Refresh(); if (was != Theme.Dark) Repaint(); });
+            Restart(themeTimer);
+        }
+
+        static void Repaint()
         {
             Theme.Refresh();
             foreach (var d in Displays) { d.Bar.RenderBar(); if (d.DockWanted) d.Dock.Reconfigure(); }
+            RepaintPanels();
+        }
+
+        /// <summary>Open panels and the settings window redraw in the new light/dark palette.</summary>
+        static void RepaintPanels()
+        {
+            if (Flyout.Current != null) Flyout.Current.Refresh2();
+            SettingsWindow.Repaint();
         }
 
         public static void OnExplorerRestart()
@@ -722,6 +742,8 @@ namespace Harbor
             bool demo = Array.IndexOf(args, "--demo") >= 0;
             ClaudeBridge.DemoQuestion = Array.IndexOf(args, "--question") >= 0;
             if (demo) UseDemoData();
+            if (Array.IndexOf(args, "--light") >= 0) { Settings.ThemeMode = "light"; Theme.Refresh(); }
+            else if (Array.IndexOf(args, "--dark") >= 0) { Settings.ThemeMode = "dark"; Theme.Refresh(); }
             var p = PrimaryDisplay;
             var dock = p.Dock.Snapshot(hover);
             var bar = p.Bar.Snapshot();

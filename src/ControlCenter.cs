@@ -120,6 +120,7 @@ namespace Harbor
             {
                 float fw = t.Height + (t.Width - t.Height) * v;
                 ui.Fill(new RectangleF(t.X, t.Y, fw, t.Height), Color.White, rad);
+                ui.TrackEdge(t, rad);
                 var kr = new RectangleF(t.X + fw - t.Height, t.Y, t.Height, t.Height);
                 using (var pen = new Pen(Color.FromArgb(28, 0, 0, 0), 1)) ui.G.DrawEllipse(pen, RectangleF.Inflate(kr, -0.5f, -0.5f));
                 var hit = ui.AddHit(id, RectangleF.Inflate(t, 0, 4 * S), null);
