@@ -36,8 +36,8 @@ namespace Harbor
         Island()
         {
             NoActivate = true;
-            LogicalWidth = 680;
-            FixedLogicalHeight = 284;
+            LogicalWidth = (int)(BodyW + 2 * (Ear + SideRoom));
+            FixedLogicalHeight = (int)(BodyH + Bounce);
             var shown = tabs;
             tab = Array.IndexOf(shown, Look.Get("IslandTab")) >= 0 ? Look.Get("IslandTab") : (shown.Length > 0 ? shown[0] : "media");
             Media.Changed += delegate { if (Visible && tab == "media") Refresh2(); };
@@ -58,7 +58,7 @@ namespace Harbor
             LastPlayed.Changed += delegate { if (Visible && tab == "media") Refresh2(); };
             AllowDrop = true; // files dropped on the notch go on the shelf
             tick.Tick += delegate { Tick(); };
-            shapeAnim.Tick += delegate { AnimateShape(); };
+            motion.Tick += delegate { Motion(); };
             watch.Tick += delegate { Watch(); };
         }
 
@@ -79,7 +79,7 @@ namespace Harbor
             inst.trigger = new RectangleF(sb.X + zone.X, sb.Y, zone.Width, sb.Height + 2);
             if (inst.Visible)
             {
-                if (inst.closing) { inst.closing = false; inst.shapeAnim.Start(); } // was folding away: grow back
+                if (inst.closing) { inst.closing = false; inst.Spring("w", 1, 190, 17); inst.Spring("h", 1, 170, 16); } // was folding away: grow back
                 inst.Refresh2();
                 return;
             }
@@ -91,6 +91,14 @@ namespace Harbor
         {
             // any tab can be opened for something (a dropped file, Claude asking) even if it's hidden from the bar
             if (Array.IndexOf(allTabs, t) < 0 || t == tab) return;
+            if (Visible)
+            {
+                // the new page slides in from the side it's on
+                var shown = tabs;
+                slideDir = Array.IndexOf(shown, t) >= Array.IndexOf(shown, tab) ? 1 : -1;
+                Spring("slide", 0, 260, 23);
+                Jump("slide", 1);
+            }
             tab = t;
             Media.WantTimeline = t == "media";
             if (t == "media") { Media.RefreshTimeline(); view.Snap(); }
@@ -100,8 +108,8 @@ namespace Harbor
         protected override void OnOpened()
         {
             outsideMs = 0;
-            // the glass is always dark here, whatever the Windows theme (AABBGGRR)
-            if (Acrylic) N.SetAccent(Handle, 4, unchecked((int)0x700C0A0A));
+            Jump("dots", Math.Max(0, Array.IndexOf(tabs, tab)));
+            Jump("slide", 0);
             Media.WantTimeline = tab == "media";
             if (tab == "media") Media.RefreshTimeline();
             view.Snap();
@@ -112,9 +120,9 @@ namespace Harbor
 
         protected override void OnClosedFlyout()
         {
-            shapeAnim.Stop();
+            motion.Stop();
+            springs.Clear();
             closing = false;
-            reveal = 1;
             tick.Stop();
             watch.Stop();
             Media.WantTimeline = false;
@@ -140,7 +148,10 @@ namespace Harbor
         {
             if (!Visible) { tick.Stop(); return; }
             int now = Environment.TickCount, age = now - lastFrame;
+            if (motion.Enabled) return; // the springs are redrawing anyway
             bool need = Dragging != null
+                || (Media.Playing && age > 60)  // the sound bars in the header
+                || DateTime.Now.Minute != lastMinute
                 || (tab == "media" && (view.Animating || (Media.Playing && age > 250)))
                 || ((tab == "pomodoro" || tab == "dashboard" || tab == "ai") && age > 1000)
                 || (tab == "downloads" && DownloadsMoving(now))
@@ -174,134 +185,131 @@ namespace Harbor
 
         // ------------------------------------------------------------------ layout
 
-        const float Pad = 22, TabBarH = 58; // the tab bar gets its own breathing room below the content
+        // the notch body is 724 x 280; the window is a little bigger so the springy open can overshoot,
+        // and the 'ears' that curve it into the menu bar fit on either side
+        const float BodyW = 724, BodyH = 280, Ear = 12, SideRoom = 12, Bounce = 14;
+        const float Pad = 44, HeaderH = 48, DotsH = 24;
 
-        // ------------------------------------------------------------------ the notch: shape, glass, open / close
+        // ------------------------------------------------------------------ the notch: shape, open / close
 
         protected override float GapBelowBar { get { return 0; } } // attached to the menu bar, like a notch
-        float Radius { get { return 26 * S; } }
+        protected override bool OwnGlass { get { return true; } }
+        protected override bool AlwaysDark { get { return true; } }
+        protected override bool Layered { get { return true; } }   // anti-aliased curves, drawn with per-pixel alpha
+        protected override void ApplyShape() { }                   // the shape is in the pixels, not a window region
 
         protected override void OnHandleCreated(EventArgs e)
         {
             base.OnHandleCreated(e);
-            int none = 1; // DWMWCP_DONOTROUND: our own shape (square top, round bottom) instead of Windows' small corners
+            int none = 1; // DWMWCP_DONOTROUND
             try { N.DwmSetWindowAttribute(Handle, 33, ref none, 4); } catch { }
         }
 
-        readonly Timer shapeAnim = new Timer { Interval = 15 };
-        float reveal = 1;          // 0..1: how much of the notch has grown down out of the menu bar
         bool closing;
 
-        /// <summary>Clips the window to the notch: square where it meets the menu bar, round at the bottom, 'reveal' of its height.</summary>
-        protected override bool OwnGlass { get { return true; } }
-        protected override bool AlwaysDark { get { return true; } }
-
-        protected override void ApplyShape()
-        {
-            if (!IsHandleCreated) return;
-            int w = Width, h = Height, r = (int)Radius;
-            float e = 1 - (1 - reveal) * (1 - reveal) * (1 - reveal); // ease-out
-            int vis = Math.Max(2, (int)Math.Round(h * e));
-            N.SetWindowRgn(Handle, N.CreateRoundRectRgn(0, -r * 2, w + 1, vis + 1, r * 2, r * 2), true);
-        }
-
-        protected override void OnSizeChanged(EventArgs e)
-        {
-            base.OnSizeChanged(e);
-            if (!shapeAnim.Enabled) ApplyShape();
-        }
-
+        /// <summary>Springs out of the menu bar: wide and short first, then down with a little bounce.</summary>
         void Grow()
         {
             closing = false;
-            reveal = 0.15f;
-            ApplyShape();
-            shapeAnim.Start();
+            Jump("w", 0.42f); Jump("h", 0.08f);
+            Spring("w", 1, 190, 17);
+            Spring("h", 1, 170, 16);
+            if (App.SnapshotMode) { Jump("w", 1); Jump("h", 1); }
         }
 
-        /// <summary>Folds back up into the menu bar, then hides.</summary>
+        /// <summary>Folds back up into the menu bar (quick, no bounce), then hides.</summary>
         void Shrink()
         {
             if (closing || !Visible) return;
             closing = true;
-            shapeAnim.Start();
+            Spring("w", 0.42f, 420, 42);
+            Spring("h", 0, 380, 40);
         }
 
-        void AnimateShape()
+        /// <summary>The notch outline for a body bx..bx+bw wide and bh tall, with concave ears into the menu bar.</summary>
+        static GraphicsPath NotchPath(float bx, float bw, float bh, float r, float e)
         {
-            reveal += (closing ? -15f / 140 : 15f / 190);
-            if (closing && reveal <= 0.05f) { shapeAnim.Stop(); reveal = 1; closing = false; CloseFlyout(); return; }
-            if (!closing && reveal >= 1) { reveal = 1; shapeAnim.Stop(); }
-            ApplyShape();
-        }
-
-        /// <summary>The notch outline (open at the top, where it meets the menu bar).</summary>
-        GraphicsPath Outline(float w, float h, float inset)
-        {
-            float r = Radius - inset;
             var p = new GraphicsPath();
-            p.AddLine(inset, 0, inset, h - r - inset);
-            p.AddArc(inset, h - 2 * r - inset, 2 * r, 2 * r, 180, -90);
-            p.AddLine(inset + r, h - inset, w - inset - r, h - inset);
-            p.AddArc(w - inset - 2 * r, h - 2 * r - inset, 2 * r, 2 * r, 90, -90);
-            p.AddLine(w - inset, h - r - inset, w - inset, 0);
+            r = Math.Max(1, Math.Min(r, Math.Min(bw, bh) / 2));
+            if (e > 0.5f) p.AddArc(bx - 2 * e, 0, 2 * e, 2 * e, 270, 90);
+            else p.AddLine(bx, 0, bx, 0);
+            p.AddArc(bx, bh - 2 * r, 2 * r, 2 * r, 180, -90);
+            p.AddArc(bx + bw - 2 * r, bh - 2 * r, 2 * r, 2 * r, 90, -90);
+            if (e > 0.5f) p.AddArc(bx + bw, 0, 2 * e, 2 * e, 180, 90);
+            else p.AddLine(bx + bw, 0, bx + bw, 0);
+            p.CloseFigure();
             return p;
-        }
-
-        /// <summary>Dark frosted glass: the blurred desktop shows through, with a glossy sheen on top and a fine light edge.</summary>
-        void Glass(Graphics g, float W, float H)
-        {
-            var all = new RectangleF(0, 0, W, H);
-            bool glass = Acrylic;
-            if (tab == "media" && Media.Has) view.Backdrop(g, all, glass ? 170 : 255);
-            else
-                using (var br = new LinearGradientBrush(all, Color.FromArgb(glass ? 150 : 252, 26, 26, 32), Color.FromArgb(glass ? 205 : 252, 8, 8, 11), 90f))
-                    g.FillRectangle(br, all);
-            // gloss: a soft sheen across the top half, and a faint lift along the bottom edge
-            // (gradients overshoot the area they fill: GDI+ wraps a gradient at its edge, which drew a bright line there)
-            using (var sheen = new LinearGradientBrush(new RectangleF(0, -2, W, H * 0.55f + 8), Color.FromArgb(30, 255, 255, 255), Color.FromArgb(0, 255, 255, 255), 90f))
-                g.FillRectangle(sheen, 0, 0, W, H * 0.55f);
-            using (var lift = new LinearGradientBrush(new RectangleF(0, H - 40 * S - 4, W, 40 * S + 8), Color.FromArgb(0, 255, 255, 255), Color.FromArgb(12, 255, 255, 255), 90f))
-                g.FillRectangle(lift, 0, H - 40 * S, W, 40 * S);
-            // edge light around the sides and the round bottom, brightest at the bottom like light catching glass
-            using (var edge = Outline(W, H, 0.75f * S))
-            using (var eb = new LinearGradientBrush(all, Color.FromArgb(26, 255, 255, 255), Color.FromArgb(70, 255, 255, 255), 90f))
-            using (var pen = new Pen(eb, 1.2f * S))
-                g.DrawPath(pen, edge);
-            // where it meets the menu bar: a hairline shadow so the notch reads as hanging from it
-            using (var seam = new LinearGradientBrush(new RectangleF(0, 0, W, 6 * S), Color.FromArgb(70, 0, 0, 0), Color.FromArgb(0, 0, 0, 0), 90f))
-                g.FillRectangle(seam, 0, 0, W, 6 * S);
         }
 
         protected override void Build(UI ui)
         {
-            float W = ui.W, H = FixedLogicalHeight * S;
-            Glass(ui.G, W, H);
+            var g = ui.G;
+            ui.Flat = true;
+            float W = ui.W;
+            float sw = Val("w"), sh = Val("h");
+            ui.Y = FixedLogicalHeight * S;
+            if (closing && sh <= 0.04f) { BeginInvoke((Action)(() => { if (closing) { closing = false; CloseFlyout(); } })); return; }
+            float bw = Math.Min(BodyW + 2 * SideRoom, BodyW * sw) * S, bh = Math.Max(2, Math.Min(BodyH + Bounce, BodyH * sh) * S);
+            float bx = (W - bw) / 2;
+            float ear = Ear * S * Math.Min(1, sh * 2.5f);
+            var body = new RectangleF((W - BodyW * S) / 2, 0, BodyW * S, BodyH * S); // where the content sits when fully open
 
             drags.Clear();
-            var c = new RectangleF(Pad * S, 18 * S, W - 2 * Pad * S, H - 18 * S - TabBarH * S);
+            using (var shape = NotchPath(bx, bw, bh, 30 * S, ear))
             using (var f = new Fonts2(S))
             {
-                switch (tab)
+                // the body: pure black, or the album's colours rising from the bottom on Media
+                using (var black = new SolidBrush(Color.FromArgb(255, 0, 0, 0))) g.FillPath(black, shape);
+                var saved = g.Save();
+                g.SetClip(shape, CombineMode.Intersect);
+                if (tab == "media" && Media.Has) view.Wash(g, new RectangleF(bx, 0, bw, bh));
+                // the content fades and settles in as the notch drops (and out as it folds away)
+                float show = closing ? Math.Max(0, (sh - 0.35f) / 0.5f) : Math.Max(0, Math.Min(1, (sh - 0.55f) / 0.4f));
+                if (show > 0.01f)
                 {
-                    case "dashboard": DashboardTab(ui, c, f); break;
-                    case "reminders": RemindersTab(ui, c, f); break;
-                    case "ai": AiTab(ui, c, f); break;
-                    case "media": MediaTab(ui, c, f); break;
-                    case "pomodoro": PomodoroTab(ui, c, f); break;
-                    case "weather": WeatherTab(ui, c, f); break;
-                    case "screentime": ScreenTimeTab(ui, c, f); break;
-                    case "clipboard": ClipboardTab(ui, c, f); break;
-                    case "shelf": ShelfTab(ui, c, f); break;
-                    case "usage": UsageTab(ui, c, f); break;
-                    case "calendar": CalendarTab(ui, c, f); break;
-                    case "timers": TimersTab(ui, c, f); break;
-                    case "notes": NotesTab(ui, c, f); break;
-                    case "downloads": DownloadsTab(ui, c, f); break;
+                    g.TranslateTransform(0, (1 - Math.Min(1, show)) * -10 * S);
+                    Header(ui, body, f);
+                    var c = new RectangleF(body.X + Pad * S, HeaderH * S, body.Width - 2 * Pad * S, (BodyH - HeaderH - DotsH) * S);
+                    float slide = Val("slide");
+                    var inner = g.Save();
+                    if (Math.Abs(slide) > 0.001f) g.TranslateTransform(slide * slideDir * 46 * S, 0);
+                    Content(ui, c, f);
+                    g.Restore(inner);
+                    float hide = Math.Min(1, Math.Abs(slide)) * 0.9f;
+                    if (hide > 0.01f)
+                        using (var veil = new SolidBrush(Color.FromArgb((int)(255 * hide), 0, 0, 0)))
+                            g.FillRectangle(veil, RectangleF.Inflate(c, 6 * S, 6 * S));
+                    Chevrons(ui, c, f);
+                    Dots(ui, new RectangleF(body.X, (BodyH - DotsH) * S - 4 * S, body.Width, DotsH * S), f);
+                    if (show < 1) using (var fade = new SolidBrush(Color.FromArgb((int)(255 * (1 - Math.Min(1, show))), 0, 0, 0))) g.FillRectangle(fade, 0, -20 * S, W, bh + 40 * S);
                 }
-                TabBar(ui, new RectangleF(0, H - TabBarH * S, W, TabBarH * S), f);
+                g.Restore(saved);
+                // a whisper of an edge so the black reads on dark wallpapers, brighter toward the bottom
+                using (var eb = new LinearGradientBrush(new RectangleF(0, -1, W, bh + 2), Color.FromArgb(0, 255, 255, 255), Color.FromArgb(34, 255, 255, 255), 90f))
+                using (var pen = new Pen(eb, 1f * S))
+                    g.DrawPath(pen, shape);
             }
-            ui.Y = H;
+        }
+
+        void Content(UI ui, RectangleF c, Fonts2 f)
+        {
+            switch (tab)
+            {
+                case "dashboard": DashboardTab(ui, c, f); break;
+                case "reminders": RemindersTab(ui, c, f); break;
+                case "ai": AiTab(ui, c, f); break;
+                case "media": MediaTab(ui, c, f); break;
+                case "pomodoro": PomodoroTab(ui, c, f); break;
+                case "weather": WeatherTab(ui, c, f); break;
+                case "screentime": ScreenTimeTab(ui, c, f); break;
+                case "clipboard": ClipboardTab(ui, c, f); break;
+                case "shelf": ShelfTab(ui, c, f); break;
+                case "usage": UsageTab(ui, c, f); break;
+                case "calendar": CalendarTab(ui, c, f); break;
+                case "timers": TimersTab(ui, c, f); break;
+                case "notes": NotesTab(ui, c, f); break;
+                case "downloads": DownloadsTab(ui, c, f); break;
+            }
         }
 
         /// <summary>White-on-dark text kit for the island (it's always dark, like a notch).</summary>
@@ -324,39 +332,232 @@ namespace Harbor
             public void Dispose() { Small.Dispose(); Body.Dispose(); Bold.Dispose(); Title.Dispose(); Big.Dispose(); Huge.Dispose(); White.Dispose(); Dim.Dispose(); Faint.Dispose(); }
         }
 
-        void TabBar(UI ui, RectangleF r, Fonts2 f)
+        // ------------------------------------------------------------------ header: tab name · battery, date and time · sound bars
+
+        int lastMinute = -1;
+
+        void Header(UI ui, RectangleF body, Fonts2 f)
         {
-            // a pill per tab; the selected one also shows its name (tighter when you've kept lots of tabs)
-            var tabs = Island.tabs;
-            float h = 30 * S, gap = (tabs.Length > 11 ? 3 : 6) * S, icon = (tabs.Length > 11 ? 30 : 34) * S;
-            var widths = new float[tabs.Length];
+            var g = ui.G;
+            float y = 12 * S, h = 26 * S;
+            lastMinute = DateTime.Now.Minute;
+
+            // the tab's name, sliding in with the tab
+            float slide = Math.Min(1, Math.Abs(Val("slide")));
+            using (var tf = new Font(Fonts.UiBold, 16f * S, GraphicsUnit.Pixel))
+            using (var tb = new SolidBrush(Color.FromArgb((int)(250 * (1 - slide)), 255, 255, 255)))
+                ui.Text(NameOf(tab), new RectangleF(body.X + 26 * S, y + slide * 8 * S, 220 * S, h), tf, tb);
+
+            // centre: battery ring, date, time
+            var now = DateTime.Now;
+            string date = now.ToString("ddd d MMM yyyy", CultureInfo.CurrentCulture), time = now.ToString(Look.Int("BarClock") == 12 ? "h:mm" : "HH:mm", CultureInfo.CurrentCulture);
+            float dw = g.MeasureString(date, f.Body, 400, StringFormat.GenericTypographic).Width, tw = g.MeasureString(time, f.Bold, 200, StringFormat.GenericTypographic).Width;
+            float ring = 15 * S, total = ring + 8 * S + dw + 7 * S + tw;
+            float x = body.X + (body.Width - total) / 2, cy = y + h / 2;
+            BatteryRing(g, new RectangleF(x, cy - ring / 2, ring, ring));
+            x += ring + 8 * S;
+            ui.Text(date, new RectangleF(x, y, dw + 4 * S, h), f.Body, f.White);
+            x += dw + 7 * S;
+            ui.Text(time, new RectangleF(x, y, tw + 6 * S, h), f.Bold, f.White);
+
+            // right: sound bars, dancing while something plays (click for Media)
+            var br = new RectangleF(body.Right - 26 * S - 24 * S, y, 24 * S, h);
+            float hot = Hot("hdr:bars");
+            SoundBars(g, RectangleF.Inflate(br, hot * 1.5f * S, 0), Media.Playing);
+            ui.AddHit("hdr:bars", RectangleF.Inflate(br, 6 * S, 4 * S), () => Go("media"), true);
+        }
+
+        void BatteryRing(Graphics g, RectangleF r)
+        {
+            var ps = SystemInformation.PowerStatus;
+            bool none = (ps.BatteryChargeStatus & BatteryChargeStatus.NoSystemBattery) != 0;
+            float pct = none ? 1 : Math.Max(0, Math.Min(1, ps.BatteryLifePercent));
+            bool charging = ps.PowerLineStatus == PowerLineStatus.Online;
+            Color c = pct <= 0.2f && !charging ? Color.FromArgb(255, 255, 69, 58) : Color.FromArgb(255, 52, 199, 89);
+            float th = 2.6f * S;
+            var rr = RectangleF.Inflate(r, -th / 2, -th / 2);
+            using (var track = new Pen(Color.FromArgb(46, 255, 255, 255), th)) g.DrawEllipse(track, rr);
+            if (pct * 360 >= 1)
+                using (var arc = new Pen(c, th) { StartCap = LineCap.Round, EndCap = LineCap.Round }) g.DrawArc(arc, rr, -90, 360 * pct);
+        }
+
+        /// <summary>Five little bars: they bounce to an invented beat while music plays and rest low when it doesn't.</summary>
+        static void SoundBars(Graphics g, RectangleF r, bool playing)
+        {
+            double t = Environment.TickCount / 1000.0;
+            float bw = r.Width / 9f, mid = r.Y + r.Height / 2, maxH = r.Height * 0.62f;
+            float[] speed = { 5.1f, 7.3f, 6.2f, 8.4f, 5.7f }, phase = { 0.2f, 1.7f, 0.9f, 2.6f, 1.3f }, rest = { 0.35f, 0.6f, 0.85f, 0.55f, 0.3f };
+            using (var b = new SolidBrush(Color.FromArgb(playing ? 245 : 150, 255, 255, 255)))
+                for (int i = 0; i < 5; i++)
+                {
+                    float k = playing ? 0.3f + 0.7f * (float)(0.5 + 0.5 * Math.Sin(t * speed[i] + phase[i]) * Math.Sin(t * speed[i] * 0.37 + phase[i] * 2)) : rest[i] * 0.45f;
+                    float bh = Math.Max(bw, maxH * k);
+                    using (var p = Gfx.RoundRect(new RectangleF(r.X + i * 2 * bw, mid - bh / 2, bw, bh), bw / 2)) g.FillPath(b, p);
+                }
+        }
+
+        // ------------------------------------------------------------------ paging: dots at the bottom, chevrons at the sides
+
+        int slideDir = 1;
+
+        void Go(string t)
+        {
+            if (t == tab) return;
+            SetTab(t, true);
+            Refresh2();
+        }
+
+        void Step(int d)
+        {
+            var shown = tabs;
+            int i = Array.IndexOf(shown, tab) + d;
+            if (i >= 0 && i < shown.Length) Go(shown[i]);
+        }
+
+        void Dots(UI ui, RectangleF r, Fonts2 f)
+        {
+            var shown = tabs;
+            int n = shown.Length;
+            if (n < 2) return;
+            float at = Spring("dots", Math.Max(0, Array.IndexOf(shown, tab)), 300, 24); // the active pill glides between dots
+            float d = 6 * S, gap = 5.5f * S, wide = 20 * S;
+            var widths = new float[n];
             float total = 0;
-            for (int i = 0; i < tabs.Length; i++)
+            for (int i = 0; i < n; i++)
             {
-                widths[i] = tabs[i] == tab ? icon + ui.G.MeasureString(NameOf(tabs[i]), f.Bold).Width + 6 * S : icon;
+                float k = Math.Max(0, 1 - Math.Abs(i - at));
+                widths[i] = d + (wide - d) * k;
                 total += widths[i] + (i > 0 ? gap : 0);
             }
-            float x = r.X + (r.Width - total) / 2, y = r.Y + (r.Height - h) / 2 - 2 * S;
-            // the tabs sit in their own frosted capsule
-            var dock = new RectangleF(x - 5 * S, y - 5 * S, total + 10 * S, h + 10 * S);
-            GlassShape(ui, dock, dock.Height / 2, 7, 16);
-            using (var gf = new Font(Fonts.Icons, 14f * S, GraphicsUnit.Pixel))
-                for (int i = 0; i < tabs.Length; i++)
+            float x = r.X + (r.Width - total) / 2, cy = r.Y + r.Height / 2;
+            string label = null;
+            float labelX = 0;
+            for (int i = 0; i < n; i++)
+            {
+                string id = "dot:" + shown[i];
+                float k = Math.Max(0, 1 - Math.Abs(i - at)), hot = Hot(id);
+                float dh = d + hot * 2 * S;
+                var dr = new RectangleF(x, cy - dh / 2, widths[i], dh);
+                using (var b = new SolidBrush(Color.FromArgb((int)(85 + 165 * Math.Max(k, hot * 0.7f)), 255, 255, 255)))
+                using (var p = Gfx.RoundRect(dr, dh / 2)) ui.G.FillPath(b, p);
+                string t = shown[i];
+                ui.AddHit(id, new RectangleF(x - gap / 2, r.Y, widths[i] + gap, r.Height), () => Go(t), true);
+                if (hot > 0.05f && t != tab) { label = t; labelX = x + widths[i] / 2; }
+                x += widths[i] + gap;
+            }
+            if (label != null) // the name of the page under the mouse, just above the dots
+            {
+                float a = Hot("dot:" + label);
+                float nw = ui.G.MeasureString(NameOf(label), f.Small).Width + 14 * S;
+                var nr = new RectangleF(labelX - nw / 2, cy - 30 * S + (1 - a) * 6 * S, nw, 20 * S);
+                using (var bg = new SolidBrush(Color.FromArgb((int)(240 * a), 44, 44, 48))) using (var p = Gfx.RoundRect(nr, 10 * S)) ui.G.FillPath(bg, p);
+                using (var nb = new SolidBrush(Color.FromArgb((int)(240 * a), 255, 255, 255))) ui.Text(NameOf(label), nr, f.Small, nb, 1);
+            }
+        }
+
+        void Chevrons(UI ui, RectangleF c, Fonts2 f)
+        {
+            var shown = tabs;
+            int i = Array.IndexOf(shown, tab);
+            float cy = c.Y + c.Height / 2;
+            if (i > 0) Chevron(ui, "chev:l", new PointF(c.X - 22 * S, cy), "", () => Step(-1));
+            if (i < shown.Length - 1) Chevron(ui, "chev:r", new PointF(c.Right + 22 * S, cy), "", () => Step(1));
+        }
+
+        void Chevron(UI ui, string id, PointF c, string glyph, Action act)
+        {
+            float k = Scale(id), r = 13 * S * k;
+            var rr = new RectangleF(c.X - r, c.Y - r, 2 * r, 2 * r);
+            using (var b = new SolidBrush(Color.FromArgb((int)(50 + 55 * Hot(id)), 255, 255, 255))) ui.G.FillEllipse(b, rr);
+            using (var gf = new Font(Fonts.Icons, 10f * S * k, GraphicsUnit.Pixel))
+            using (var wb = new SolidBrush(Color.FromArgb(235, 255, 255, 255)))
+                ui.Glyph(glyph, rr, gf, wb);
+            ui.AddHit(id, RectangleF.Inflate(rr, 4 * S, 4 * S), act, true);
+        }
+
+        // a horizontal wheel, or a two-finger swipe on a touchpad, pages through the tabs
+        int hwheel;
+        protected override void WndProc(ref Message m)
+        {
+            if (m.Msg == 0x020E /*WM_MOUSEHWHEEL*/ && Visible)
+            {
+                hwheel += (short)((m.WParam.ToInt64() >> 16) & 0xFFFF);
+                if (Math.Abs(hwheel) >= 120) { Step(hwheel > 0 ? 1 : -1); hwheel = 0; }
+                m.Result = IntPtr.Zero;
+                return;
+            }
+            base.WndProc(ref m);
+        }
+
+        // ------------------------------------------------------------------ springs: all the motion on the island
+
+        sealed class SpringVal { public float V, Vel, Target, K, C; }
+        readonly Dictionary<string, SpringVal> springs = new Dictionary<string, SpringVal>();
+        readonly Timer motion = new Timer { Interval = 15 };
+        readonly System.Diagnostics.Stopwatch clock = System.Diagnostics.Stopwatch.StartNew();
+        double lastStep;
+
+        float Val(string id) { SpringVal s; return springs.TryGetValue(id, out s) ? s.V : 0; }
+
+        /// <summary>Sets a spring's target and returns where it is now. k = stiffness, c = damping (less damping, more bounce).</summary>
+        float Spring(string id, float target, float k = 320, float c = 24)
+        {
+            SpringVal s;
+            if (!springs.TryGetValue(id, out s)) { springs[id] = s = new SpringVal { V = target, Target = target, K = k, C = c }; return s.V; }
+            s.K = k; s.C = c;
+            if (s.Target != target) { s.Target = target; if (App.SnapshotMode) { s.V = target; s.Vel = 0; } else Wake(); }
+            return s.V;
+        }
+
+        /// <summary>Puts a spring somewhere without animating (it then moves back toward its target).</summary>
+        void Jump(string id, float v)
+        {
+            SpringVal s;
+            if (!springs.TryGetValue(id, out s)) springs[id] = s = new SpringVal { Target = v, K = 320, C = 24 };
+            s.V = v; s.Vel = 0;
+            if (s.Target != v) Wake();
+        }
+
+        /// <summary>0..1, easing in while the mouse is over the hit with this id.</summary>
+        float Hot(string id) { return Math.Max(0, Math.Min(1, Spring("hot:" + id, Hover == id ? 1 : 0, 420, 26))); }
+
+        /// <summary>A button's size: grows a touch under the mouse, squashes while pressed, and bounces back.</summary>
+        float Scale(string id)
+        {
+            float hot = Spring("hot:" + id, Hover == id ? 1 : 0, 420, 26), press = Spring("press:" + id, Pressed == id ? 1 : 0, 700, 26);
+            return 1 + 0.07f * hot - 0.12f * press;
+        }
+
+        void Wake()
+        {
+            if (motion.Enabled || App.SnapshotMode) return;
+            lastStep = clock.Elapsed.TotalSeconds;
+            motion.Start();
+        }
+
+        void Motion()
+        {
+            if (!Visible) { motion.Stop(); return; }
+            double now = clock.Elapsed.TotalSeconds;
+            float dt = (float)Math.Min(0.05, now - lastStep);
+            lastStep = now;
+            bool moving = false;
+            foreach (var s in springs.Values)
+            {
+                if (s.V == s.Target && s.Vel == 0) continue;
+                // small fixed steps keep the stiff springs stable
+                for (float left = dt; left > 0; left -= 0.004f)
                 {
-                    var pr = new RectangleF(x, y, widths[i], h);
-                    bool sel = tabs[i] == tab;
-                    string id = "tab:" + tabs[i];
-                    if (sel) GlassShape(ui, pr, h / 2, 30, 30);
-                    else if (Hover == id) ui.Fill(pr, Color.FromArgb(22, 255, 255, 255), h / 2);
-                    var ir = new RectangleF(pr.X, pr.Y, icon, h);
-                    string glyph = GlyphOf(tabs[i]);
-                    if (glyph != null) ui.Glyph(glyph, ir, gf, sel ? f.White : f.Dim);
-                    else WeatherIcons.Draw(ui.G, RectangleF.Inflate(ir, -8 * S, -6 * S), Weather.Now != null ? Weather.Now.Code : 2, Weather.Now == null || Weather.Now.Day);
-                    if (sel) ui.Text(NameOf(tabs[i]), new RectangleF(pr.X + icon - 4 * S, pr.Y, pr.Width - icon, h), f.Bold, f.White);
-                    string t = tabs[i];
-                    ui.AddHit(id, pr, () => SetTab(t, true), true);
-                    x += widths[i] + gap;
+                    float h = Math.Min(0.004f, left);
+                    s.Vel += (s.K * (s.Target - s.V) - s.C * s.Vel) * h;
+                    s.V += s.Vel * h;
                 }
+                if (Math.Abs(s.Target - s.V) < 0.002f && Math.Abs(s.Vel) < 0.02f) { s.V = s.Target; s.Vel = 0; }
+                else moving = true;
+            }
+            lastFrame = Environment.TickCount;
+            Refresh2();
+            if (!moving) motion.Stop();
         }
 
         static string Span(TimeSpan t)
@@ -368,128 +569,6 @@ namespace Harbor
         void Card(UI ui, RectangleF r) { GlassShape(ui, r, 16 * S, 14, 26); }
 
         void GlassShape(UI ui, RectangleF r, float radius, int fill, int edge) { ui.Glass(r, radius, fill, edge); }
-
-        // ------------------------------------------------------------------ media
-
-        void MediaTab(UI ui, RectangleF c, Fonts2 f)
-        {
-            view.NoteSong();
-            if (!Media.Has && LastPlayed.Has) { LastPlayedCard(ui, c, f); return; }
-            if (!Media.Has)
-            {
-                ui.Text("Nothing playing", new RectangleF(c.X, c.Y + c.Height / 2 - 26 * S, c.Width, 24 * S), f.Title, f.White, 1);
-                ui.Text("Play something in Spotify, YouTube or any media app", new RectangleF(c.X, c.Y + c.Height / 2, c.Width, 20 * S), f.Body, f.Dim, 1);
-                return;
-            }
-            float lw = 300 * S;
-            var art = new RectangleF(c.X, c.Y, 88 * S, 88 * S);
-            view.Cover(ui, art, 12 * S);
-            float tx = art.Right + 14 * S, tw = c.X + lw - tx;
-            ui.Text(Media.Title, new RectangleF(tx, art.Y + 12 * S, tw, 22 * S), f.Title, f.White);
-            ui.Text(Media.Artist, new RectangleF(tx, art.Y + 36 * S, tw, 20 * S), f.Body, f.Dim);
-            ui.Text(Media.AppName, new RectangleF(tx, art.Bottom - 22 * S, tw, 18 * S), f.Small, f.Faint);
-            OutputPill(ui, tx + Math.Min(tw * 0.45f, ui.G.MeasureString(Media.AppName ?? "", f.Small).Width + 8 * S), art.Bottom - 23 * S, tx + tw, f);
-            float y = art.Bottom + 14 * S;
-            if (Media.Duration > TimeSpan.Zero) { view.Progress(ui, this, c.X, y, lw, f.Small); y += 34 * S; }
-            view.Controls(ui, this, c.X + lw / 2, y + 22 * S, 0.82f);
-
-            float rx = c.X + lw + 30 * S, rw = c.Right - rx;
-            ui.Text("LYRICS", new RectangleF(rx, c.Y, 100 * S, 18 * S), f.Small, f.Faint);
-            view.LyricsSwitch(ui, this, new RectangleF(c.Right - 58 * S, c.Y - 2 * S, 58 * S, 22 * S), f.Small);
-            var box = new RectangleF(rx - 8 * S, c.Y + 26 * S, rw + 8 * S, c.Bottom - c.Y - 26 * S);
-            if (!view.Lyrics(ui, this, box, 18f)) ui.Text("Lyrics are off", box, f.Body, f.Faint, 1);
-        }
-
-        // ------------------------------------------------------------------ pomodoro
-
-        static readonly Color Ember = Color.FromArgb(255, 232, 160, 96);
-
-        void PomodoroTab(UI ui, RectangleF c, Fonts2 f)
-        {
-            // ring timer
-            float d = 128 * S, cx = c.X + 90 * S;
-            var ring = new RectangleF(cx - d / 2, c.Y + 2 * S, d, d);
-            using (var track = new Pen(Color.FromArgb(38, 255, 255, 255), 7 * S)) ui.G.DrawEllipse(track, ring);
-            float p = Pomodoro.Progress;
-            if (p * 360 >= 1) // GDI+ fails on a near-zero arc
-                using (var arc = new Pen(Pomodoro.Current == Pomodoro.Phase.Work ? Ember : Color.FromArgb(255, 100, 200, 160), 7 * S) { StartCap = LineCap.Round, EndCap = LineCap.Round })
-                    ui.G.DrawArc(arc, ring, -90, 360 * p);
-            var rem = Pomodoro.Remaining;
-            ui.Text(((int)rem.TotalMinutes).ToString("00") + ":" + rem.Seconds.ToString("00"), new RectangleF(ring.X, ring.Y + d / 2 - 22 * S, d, 34 * S), f.Big, f.White, 1);
-            ui.Text(Pomodoro.Running ? Pomodoro.Name(Pomodoro.Current) : (p > 0 ? "Paused" : "Ready to focus"), new RectangleF(ring.X, ring.Y + d / 2 + 12 * S, d, 18 * S), f.Small, f.Dim, 1);
-
-            float by = ring.Bottom + 30 * S;
-            using (var gf = new Font(Fonts.Icons, 14f * S, GraphicsUnit.Pixel))
-            using (var big = new Font(Fonts.Icons, 16f * S, GraphicsUnit.Pixel))
-            using (var dark = new SolidBrush(Color.FromArgb(235, 18, 18, 22)))
-            {
-                RoundBtn(ui, "preset", new PointF(cx - 52 * S, by), 17 * S, "", Pomodoro.Reset, gf, f.White, false);
-                RoundBtn(ui, "ptoggle", new PointF(cx, by), 21 * S, Pomodoro.Running ? "" : "", Pomodoro.Toggle, big, dark, true);
-                RoundBtn(ui, "pskip", new PointF(cx + 52 * S, by), 17 * S, "", Pomodoro.Skip, gf, f.White, false);
-            }
-
-            // phases + today's sessions
-            float px = c.X + 200 * S, pw = 196 * S;
-            int done = Pomodoro.SessionsToday;
-            ui.Text(done == 0 ? "No sessions yet today" : done + (done == 1 ? " session" : " sessions") + " today", new RectangleF(px, c.Y, pw, 20 * S), f.Bold, f.White);
-            for (int i = 0; i < 4; i++)
-                using (var b = new SolidBrush(i < done % 4 || (done > 0 && done % 4 == 0) ? Ember : Color.FromArgb(50, 255, 255, 255)))
-                    ui.G.FillEllipse(b, px + i * 13 * S, c.Y + 26 * S, 8 * S, 8 * S);
-            float ry = c.Y + 46 * S;
-            foreach (Pomodoro.Phase ph in Enum.GetValues(typeof(Pomodoro.Phase)))
-            {
-                var row = new RectangleF(px - 8 * S, ry, pw + 8 * S, 36 * S);
-                string id = "ph" + (int)ph;
-                bool sel = Pomodoro.Current == ph;
-                if (sel || Hover == id) ui.Fill(row, Color.FromArgb(sel ? 34 : 18, 255, 255, 255), 10 * S);
-                using (var dot = new SolidBrush(ph == Pomodoro.Phase.Work ? Ember : Color.FromArgb(255, 100, 200, 160)))
-                    ui.G.FillEllipse(dot, row.X + 12 * S, row.Y + row.Height / 2 - 4 * S, 8 * S, 8 * S);
-                ui.Text(Pomodoro.Name(ph), new RectangleF(row.X + 30 * S, row.Y, row.Width - 80 * S, row.Height), sel ? f.Bold : f.Body, sel ? f.White : f.Dim);
-                ui.Text((int)Pomodoro.Length(ph).TotalMinutes + "m", new RectangleF(row.X, row.Y, row.Width - 12 * S, row.Height), f.Body, f.Dim, 2);
-                var pp = ph;
-                ui.AddHit(id, row, () => Pomodoro.Select(pp), true);
-                ry += 40 * S;
-            }
-
-            // focus target: which reminder this session is for (click to step through them)
-            var fr = new RectangleF(px - 8 * S, ry + 2 * S, pw + 8 * S, 30 * S);
-            if (Hover == "pfocus") ui.Fill(fr, Color.FromArgb(18, 255, 255, 255), 10 * S);
-            var focus = Pomodoro.Focus;
-            using (var tf = new Font(Fonts.Icons, 12f * S, GraphicsUnit.Pixel)) ui.Glyph("", new RectangleF(fr.X + 6 * S, fr.Y, 20 * S, fr.Height), tf, focus != null ? f.White : f.Faint);
-            ui.Text(focus != null ? focus.Text : (Reminders.Open().Count > 0 ? "No focus target (click to pick)" : "No focus target"), new RectangleF(fr.X + 30 * S, fr.Y, fr.Width - 36 * S, fr.Height), f.Small, focus != null ? f.White : f.Faint);
-            ui.AddHit("pfocus", fr, Pomodoro.NextFocus, true);
-
-            // day progress
-            var card = new RectangleF(c.X + 420 * S, c.Y, c.Right - c.X - 420 * S, c.Height - 4 * S);
-            Card(ui, card);
-            float ix = card.X + 16 * S, iw = card.Width - 32 * S;
-            int start = Math.Max(0, Math.Min(23, Look.Int("DayStart"))), end = Math.Max(start + 1, Math.Min(24, Look.Int("DayEnd")));
-            var now = DateTime.Now;
-            DateTime from = now.Date.AddHours(start), to = now.Date.AddHours(end);
-            ui.Text("Day progress", new RectangleF(ix, card.Y + 12 * S, iw, 20 * S), f.Bold, f.White);
-            ui.Text(start + ":00 – " + end + ":00", new RectangleF(ix, card.Y + 12 * S, iw, 20 * S), f.Small, f.Faint, 2);
-            string head, sub;
-            float frac;
-            if (now < from) { head = Span(from - now); sub = "until your day starts"; frac = 0; }
-            else if (now >= to) { head = "Done"; sub = "for today. See you tomorrow"; frac = 1; }
-            else { head = Span(to - now); sub = "left in your day"; frac = (float)((now - from).TotalSeconds / (to - from).TotalSeconds); }
-            ui.Text(head, new RectangleF(ix, card.Y + 44 * S, iw, 34 * S), f.Big, f.White);
-            ui.Text(sub, new RectangleF(ix, card.Y + 78 * S, iw, 18 * S), f.Small, f.Dim);
-            var bar = new RectangleF(ix, card.Y + 108 * S, iw, 6 * S);
-            ui.Fill(bar, Color.FromArgb(40, 255, 255, 255), 3 * S);
-            ui.Fill(new RectangleF(bar.X, bar.Y, Math.Max(6 * S, bar.Width * frac), bar.Height), Ember, 3 * S);
-            ui.Text((int)Math.Round(frac * 100) + "% of your day", new RectangleF(ix, bar.Bottom + 6 * S, iw, 18 * S), f.Small, f.Faint);
-            ui.Text("Focus today: " + Span(TimeSpan.FromMinutes(done * Pomodoro.Length(Pomodoro.Phase.Work).TotalMinutes)), new RectangleF(ix, card.Bottom - 30 * S, iw, 18 * S), f.Small, f.Dim);
-        }
-
-        void RoundBtn(UI ui, string id, PointF c, float r, string glyph, Action act, Font font, Brush b, bool filled)
-        {
-            var rr = new RectangleF(c.X - r, c.Y - r, r * 2, r * 2);
-            if (filled) using (var fb = new SolidBrush(Color.FromArgb(Hover == id ? 255 : 238, 255, 255, 255))) ui.G.FillEllipse(fb, rr);
-            else using (var hb = new SolidBrush(Color.FromArgb(Hover == id ? 50 : 26, 255, 255, 255))) ui.G.FillEllipse(hb, rr);
-            ui.Glyph(glyph, rr, font, b);
-            ui.AddHit(id, rr, act, true);
-        }
 
         // ------------------------------------------------------------------ weather
 
@@ -658,17 +737,6 @@ namespace Harbor
             return d.TotalDays < 2 ? "yesterday" : (int)d.TotalDays + "d ago";
         }
 
-        /// <summary>A tick circle (open, or filled with a check when done).</summary>
-        void TickCircle(UI ui, RectangleF r, bool done, bool hot)
-        {
-            using (var pen = new Pen(Color.FromArgb(hot ? 230 : 150, 255, 255, 255), 1.6f * S)) ui.G.DrawEllipse(pen, r);
-            if (done)
-            {
-                using (var b = new SolidBrush(Color.FromArgb(255, 48, 209, 88))) ui.G.FillEllipse(b, r);
-                using (var gf = new Font(Fonts.Icons, r.Height * 0.55f, GraphicsUnit.Pixel)) ui.Glyph("", r, gf, Brushes.White);
-            }
-        }
-
         void Pill(UI ui, RectangleF r, string text, Color fill, Font font, Brush b)
         {
             ui.Fill(r, fill, r.Height / 2);
@@ -734,71 +802,6 @@ namespace Harbor
             Fields["rem"] = "";
             dueChoice = 0;
             Refresh2();
-        }
-
-        void RemindersTab(UI ui, RectangleF c, Fonts2 f)
-        {
-            // new reminder
-            float lw = 250 * S;
-            ui.Text("New reminder", new RectangleF(c.X, c.Y, lw, 20 * S), f.Bold, f.White);
-            ui.Pad = c.X - 8 * S;
-            ui.Right = c.X + lw + 8 * S;
-            ui.Y = c.Y + 20 * S;
-            ui.TextField("rem", "What do you want to remember?", false, AddReminder);
-            float cx = c.X, cy = c.Y + 64 * S;
-            using (var dark = new SolidBrush(Color.FromArgb(235, 18, 18, 22)))
-            {
-                for (int i = 0; i < dueNames.Length; i++)
-                {
-                    float w = PillWidth(ui, dueNames[i], f.Small);
-                    if (cx + w > c.X + lw) { cx = c.X; cy += 30 * S; }
-                    var chip = new RectangleF(cx, cy, w, 24 * S);
-                    string id = "due" + i;
-                    bool sel = dueChoice == i;
-                    Pill(ui, chip, dueNames[i], sel ? Color.FromArgb(235, 255, 255, 255) : Color.FromArgb(Hover == id ? 54 : 30, 255, 255, 255), f.Small, sel ? (Brush)dark : f.White);
-                    int pick = i;
-                    ui.AddHit(id, chip, () => dueChoice = pick, true);
-                    cx += w + 6 * S;
-                }
-                var add = new RectangleF(c.X, c.Bottom - 34 * S, lw, 30 * S);
-                bool can = Field("rem").Trim() != "";
-                ui.Fill(add, can ? Color.FromArgb(Hover == "radd" ? 255 : 235, 255, 255, 255) : Color.FromArgb(40, 255, 255, 255), 15 * S);
-                ui.Text("Add reminder", add, f.Bold, can ? (Brush)dark : f.Faint, 1);
-                ui.AddHit("radd", add, AddReminder, true);
-            }
-
-            // the list
-            float rx = c.X + lw + 30 * S, rw = c.Right - rx;
-            var open = Reminders.Open();
-            int doneToday = Reminders.DoneToday;
-            ui.Text(open.Count == 0 ? "All caught up" : open.Count + " to do", new RectangleF(rx, c.Y, rw, 20 * S), f.Bold, f.White);
-            if (doneToday > 0) ui.Text(doneToday + " done today", new RectangleF(rx, c.Y, rw, 20 * S), f.Small, f.Faint, 2);
-            if (open.Count == 0) { ui.Text("Nothing to remember. Add something on the left.", new RectangleF(rx, c.Y + 70 * S, rw, 20 * S), f.Body, f.Faint, 1); return; }
-            float y = c.Y + 30 * S;
-            for (int i = 0; i < open.Count && y + 34 * S <= c.Bottom; i++)
-            {
-                var it = open[i];
-                var row = new RectangleF(rx - 8 * S, y, rw + 8 * S, 34 * S);
-                string id = "rr" + it.Id;
-                bool hot = Hover == id || Hover == "rt" + it.Id || Hover == "rx" + it.Id;
-                if (hot) ui.Fill(row, Color.FromArgb(16, 255, 255, 255), 9 * S);
-                ui.AddHit(id, row, null);
-                var tick = new RectangleF(rx, y + 9 * S, 16 * S, 16 * S);
-                TickCircle(ui, tick, false, Hover == "rt" + it.Id);
-                ui.AddHit("rt" + it.Id, RectangleF.Inflate(tick, 5 * S, 5 * S), () => Reminders.Toggle(it), true);
-                string due = Reminders.DueText(it);
-                ui.Text(it.Text, new RectangleF(tick.Right + 10 * S, y, rw - 150 * S, 34 * S), f.Body, f.White);
-                if (due != null)
-                    using (var db = new SolidBrush(Reminders.Overdue(it) ? Color.FromArgb(255, 255, 105, 97) : NowPlayingView.Dim))
-                        ui.Text(due, new RectangleF(rx, y, rw - (hot ? 30 : 4) * S, 34 * S), f.Small, db, 2);
-                if (hot)
-                {
-                    var x = new RectangleF(row.Right - 26 * S, y + 7 * S, 20 * S, 20 * S);
-                    using (var gf = new Font(Fonts.Icons, 9f * S, GraphicsUnit.Pixel)) ui.Glyph("", x, gf, Hover == "rx" + it.Id ? f.White : f.Dim);
-                    ui.AddHit("rx" + it.Id, x, () => Reminders.Remove(it), true);
-                }
-                y += 36 * S;
-            }
         }
 
         // ------------------------------------------------------------------ AI coding (Claude Code)
@@ -898,8 +901,7 @@ namespace Harbor
             var now = DateTime.Now;
             int active = 0;
             foreach (var s in ClaudeBridge.Sessions.Values) if ((s.Status == "Running" || s.Status == "Waiting") && (now - s.Updated).TotalMinutes < 30) active++;
-            ui.Text("AI Coding", new RectangleF(c.X, c.Y - 2 * S, 200 * S, 22 * S), f.Title, f.White);
-            float hx = c.X + ui.G.MeasureString("AI Coding", f.Title).Width + 10 * S;
+            float hx = c.X;
             using (var dot = new SolidBrush(active > 0 ? Running : Color.FromArgb(90, 255, 255, 255))) ui.G.FillEllipse(dot, hx, c.Y + 7 * S, 7 * S, 7 * S);
             ui.Text(active + " active", new RectangleF(hx + 12 * S, c.Y, 120 * S, 18 * S), f.Small, active > 0 ? f.White : f.Faint);
             if (!ClaudeBridge.HooksOn)

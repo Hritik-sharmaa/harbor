@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.4.0 — 2026-11-01 (preview)
+
+**A new notch**
+- **Clean and black:** the island is now a pure black notch with smooth, anti-aliased edges that curve into the menu bar, and flat dark cards instead of glass.
+- **A header on every page:** the page's name, a battery ring, the date and time, and little sound bars that dance while music plays (click them for Media).
+- **Page dots instead of the icon bar:** hover a dot to see its name, click to jump. Round arrows at the sides, ←/→, or a sideways swipe on a touchpad move between pages.
+- **Springs everywhere:**
+  - The notch springs out wide and short, then drops down with a small bounce while its content fades in. It folds back up quickly when the mouse leaves.
+  - Pages slide in from the side they're on, and the active dot glides between dots.
+  - Buttons grow a touch under the mouse, squash when pressed and bounce back. Ticking a reminder pops the check in.
+  - The Pomodoro ring glides instead of jumping each second.
+- **Media:** cover, big title, one-line progress (elapsed · bar · remaining), plain controls with a lyrics button, and the album's colours glowing up from the bottom. The sound output is a speaker button whose name shows on hover.
+- **Pomodoro:** a glowing ring, a big countdown with reset and skip beside it, and pills for the other two phases either side of play.
+- **Reminders:** a big "done / total" for today, Add and due-time pills, rounded task rows, and today's finished ones struck through in green.
+- **Shelf:** a dashed drop area that lights up as you drag files over it.
+
+**Live activities**
+- The same black shape and spring as the notch, with two lines of text, a ring around the icon showing the level (battery, headphones), and a big percentage, a gently pulsing icon or an action button on the right.
+
+
 ## 0.3.2 — 2026-10-31 (preview)
 
 **Light mode everywhere**

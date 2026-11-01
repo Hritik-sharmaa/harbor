@@ -1,0 +1,9 @@
+.dl-count {
+  display: inline-flex; align-items: center; gap: 8px; padding: 6px 14px 6px 12px; border-radius: 999px;
+  background: rgba(255, 255, 255, .05); border: 1px solid var(--line); font-size: 13px; color: var(--text-2);
+}
+.dl-count b { color: var(--text); font-weight: 600; font-variant-numeric: tabular-nums; }
+.dl-dot { position: relative; width: 7px; height: 7px; border-radius: 50%; background: var(--green); }
+.dl-dot::after { content: ""; position: absolute; inset: 0; border-radius: 50%; background: var(--green); animation: dl-ping 2s ease-out infinite; }
+@keyframes dl-ping { from { transform: scale(1); opacity: .7; } to { transform: scale(3); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) { .dl-dot::after { animation: none; } }

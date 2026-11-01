@@ -3,6 +3,7 @@ import { AnimatePresence, motion, useInView } from 'motion/react'
 import { calm, gsap, still, useGSAP } from '../lib/motion'
 import { CHANGELOG, DL, GH, heroSpecs, islandViews, shot } from '../content'
 import { GitHubMark, Segmented, Words } from '../components/ui'
+import DownloadCount from '../components/DownloadCount'
 import './Hero.css'
 
 // The island on a real Harbor desktop. It cycles through its views on its own until
@@ -56,7 +57,7 @@ export default function Hero() {
     <section className="hero" id="top" ref={ref}>
       <div className="hero-sky" aria-hidden="true" />
       <div className="wrap hero-copy">
-        <a className="pill-link" href={CHANGELOG}><span className="pill-new">0.3.0</span> A notch for everyone →</a>
+        <a className="pill-link" href={CHANGELOG}><span className="pill-new">0.4.0</span> A new notch, with springs →</a>
         <Words as="h1" text="Windows, with a *Mac's manners.*" />
         <p className="hero-lead">
           A dock, a menu bar, Control Center and a drop-down island for Windows 10 and 11.
@@ -66,6 +67,7 @@ export default function Hero() {
           <a className="btn" href={DL}>Download for Windows</a>
           <a className="btn ghost" href={GH}><GitHubMark /> Star on GitHub</a>
         </div>
+        <DownloadCount className="hero-count" />
         <ul className="hero-specs">{heroSpecs.map(s => <li key={s}>{s}</li>)}</ul>
       </div>
 
@@ -73,21 +75,25 @@ export default function Hero() {
         <div className="desk-glow" aria-hidden="true" />
         <div className="desk">
           <img className="desk-shot" src={shot('hero')} width="1920" height="1080" alt="Harbor on a Windows desktop: the menu bar, Control Center and the dock" />
+          {/* the notch springs out wide and short, then drops with a small bounce, like it does in Harbor */}
           <motion.div
             className="island" aria-hidden="true"
-            animate={open ? { width: '35.4%', height: '26.3%' } : { width: '8%', height: '2.4%' }}
-            transition={{ type: 'spring', stiffness: 230, damping: 26 }}
+            animate={open ? { width: '37.71%', height: '25.93%' } : { width: '8%', height: '2.4%' }}
+            transition={{ width: { type: 'spring', stiffness: 260, damping: 18 }, height: { type: 'spring', stiffness: 220, damping: 16, delay: open ? .05 : 0 } }}
           >
-            <AnimatePresence mode="wait">
-              {open && (
-                <motion.img
-                  key={id} src={shot(`island_${id}`)} alt=""
-                  initial={{ opacity: 0, filter: 'blur(8px)', scale: .96 }}
-                  animate={{ opacity: 1, filter: 'blur(0px)', scale: 1, transition: { delay: .18, duration: .35 } }}
-                  exit={{ opacity: 0, transition: { duration: .12 } }}
-                />
-              )}
-            </AnimatePresence>
+            <span className="ear l" /><span className="ear r" />
+            <div className="island-body">
+              <AnimatePresence mode="wait">
+                {open && (
+                  <motion.img
+                    key={id} src={shot(`island_${id}`)} alt=""
+                    initial={{ opacity: 0, y: -10, filter: 'blur(8px)' }}
+                    animate={{ opacity: 1, y: 0, filter: 'blur(0px)', transition: { delay: .22, duration: .35 } }}
+                    exit={{ opacity: 0, transition: { duration: .12 } }}
+                  />
+                )}
+              </AnimatePresence>
+            </div>
           </motion.div>
         </div>
       </div>
@@ -97,7 +103,7 @@ export default function Hero() {
         <div className="hero-caption" aria-live="polite">
           <AnimatePresence mode="wait">
             <motion.div key={id} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: -8 }} transition={{ duration: .25 }}>
-              <img className="caption-shot" src={shot(`island_${id}`)} width="680" height="284" alt={`The island showing ${name}`} />
+              <img className="caption-shot" src={shot(`island_${id}`)} width="772" height="294" alt={`The island showing ${name}`} />
               <p><b>{name}.</b> {caption}</p>
             </motion.div>
           </AnimatePresence>

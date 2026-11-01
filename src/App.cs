@@ -32,6 +32,7 @@ namespace Harbor
         readonly int taskbarCreated = N.RegisterWindowMessage("TaskbarCreated");
         public static readonly int OpenControlCenter = N.RegisterWindowMessage("Harbor_ControlCenter");
         public static readonly int OpenSettings = N.RegisterWindowMessage("Harbor_OpenSettings");
+        public static readonly int PillDemo = N.RegisterWindowMessage("Harbor_PillDemo");
 
         public Host() { CreateHandle(new CreateParams { Caption = "HarborHost" }); }
 
@@ -41,6 +42,7 @@ namespace Harbor
             if (m.Msg == N.WM_CLOSE) { App.Quit(); return; }
             if (m.Msg == OpenControlCenter) { ControlCenter.ToggleOnPrimary(); return; }
             if (m.Msg == OpenSettings) { SettingsWindow.ShowWindow(); return; }
+            if (m.Msg == PillDemo) { LiveActivity.Demo(); return; }
             if (m.Msg == 0x312 /*WM_HOTKEY*/) { App.OnHotkey(m.WParam.ToInt32()); return; }
             if (m.Msg == taskbarCreated)
             {
@@ -740,6 +742,7 @@ namespace Harbor
             if (hi >= 0 && hi + 1 < args.Length) int.TryParse(args[hi + 1], out hover);
             Directory.CreateDirectory(dir);
             bool demo = Array.IndexOf(args, "--demo") >= 0;
+            clearShots = Array.IndexOf(args, "--clear") >= 0;
             ClaudeBridge.DemoQuestion = Array.IndexOf(args, "--question") >= 0;
             if (demo) UseDemoData();
             if (Array.IndexOf(args, "--light") >= 0) { Settings.ThemeMode = "light"; Theme.Refresh(); }
@@ -751,6 +754,8 @@ namespace Harbor
             Compose(dock, Path.Combine(dir, "dock.png"));
             IconSheet(Path.Combine(dir, "icons.png"));
             using (var bn = Banners.Snapshot(p)) Compose(bn, Path.Combine(dir, "banner.png"));
+            int pn = 0;
+            foreach (var pic in LiveActivity.Pictures(p.Scale)) using (pic) Compose(pic, Path.Combine(dir, "pill" + pn++ + ".png"));
             float s = p.Scale;
             var cc = new ControlCenter { bar = p.Bar };
             var shots = new List<KeyValuePair<string, Flyout>>
@@ -918,11 +923,14 @@ namespace Harbor
             }
         }
 
+        static bool clearShots; // --clear: no wallpaper behind the pictures (transparent PNGs for the website)
+
         static void Compose(Bitmap layer, string file)
         {
             using (var bg = new Bitmap(layer.Width, layer.Height, PixelFormat.Format32bppArgb))
             using (var g = Graphics.FromImage(bg))
             {
+                if (!clearShots)
                 using (var br = new LinearGradientBrush(new Rectangle(0, 0, bg.Width, bg.Height),
                     Color.FromArgb(255, 58, 96, 168), Color.FromArgb(255, 190, 120, 160), 20f))
                     g.FillRectangle(br, 0, 0, bg.Width, bg.Height);
@@ -998,11 +1006,11 @@ namespace Harbor
                     Installer.DeleteFilesAfterExit();
                     return;
                 }
-                if (Array.IndexOf(args, "--quit") >= 0 || Array.IndexOf(args, "--cc") >= 0)
+                if (Array.IndexOf(args, "--quit") >= 0 || Array.IndexOf(args, "--cc") >= 0 || Array.IndexOf(args, "--pill-demo") >= 0)
                 {
                     IntPtr host = N.FindWindow(null, "HarborHost");
                     if (host != IntPtr.Zero)
-                        N.PostMessage(host, Array.IndexOf(args, "--quit") >= 0 ? N.WM_CLOSE : Host.OpenControlCenter, IntPtr.Zero, IntPtr.Zero);
+                        N.PostMessage(host, Array.IndexOf(args, "--quit") >= 0 ? N.WM_CLOSE : Array.IndexOf(args, "--cc") >= 0 ? Host.OpenControlCenter : Host.PillDemo, IntPtr.Zero, IntPtr.Zero);
                     return;
                 }
                 if (!created && Array.IndexOf(args, "--snapshot") < 0)

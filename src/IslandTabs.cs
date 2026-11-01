@@ -209,7 +209,6 @@ namespace Harbor
 
         void CalendarTab(UI ui, RectangleF c, Fonts2 f)
         {
-            ui.Text("Calendar", new RectangleF(c.X, c.Y - 2 * S, 200 * S, 22 * S), f.Title, f.White);
             if (!CalendarFeed.Configured)
             {
                 using (var gf = new Font(Fonts.Icons, 26f * S, GraphicsUnit.Pixel)) ui.Glyph("", new RectangleF(c.X, c.Y + 34 * S, c.Width, 36 * S), gf, f.Faint);
@@ -410,7 +409,6 @@ namespace Harbor
         void NotesTab(UI ui, RectangleF c, Fonts2 f)
         {
             float lw = 236 * S;
-            ui.Text("Notes", new RectangleF(c.X, c.Y - 2 * S, lw, 22 * S), f.Title, f.White);
             Field(ui, "note", "Jot something down…", c.X, c.Y + 20 * S, lw, () =>
             {
                 Notes.Add(Fields.ContainsKey("note") ? Fields["note"] : "");

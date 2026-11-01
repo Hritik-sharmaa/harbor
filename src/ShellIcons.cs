@@ -892,12 +892,15 @@ namespace Harbor
 
         public Bitmap Bitmap { get { return bmp; } }
 
-        public void Present(IntPtr hwnd, int x, int y, byte opacity = 255)
+        public void Present(IntPtr hwnd, int x, int y, byte opacity = 255) { Present(hwnd, x, y, W, H, opacity); }
+
+        /// <summary>Shows the top-left w x h of the surface in a layered window at (x, y).</summary>
+        public void Present(IntPtr hwnd, int x, int y, int w, int h, byte opacity = 255)
         {
             G.Flush(FlushIntention.Sync);
             N.GdiFlush();
             var dst = new POINT(x, y);
-            var size = new SIZE(W, H);
+            var size = new SIZE(Math.Min(w, W), Math.Min(h, H));
             var src = new POINT(0, 0);
             var blend = new BLENDFUNCTION { BlendOp = 0, BlendFlags = 0, SourceConstantAlpha = opacity, AlphaFormat = 1 };
             N.UpdateLayeredWindow(hwnd, IntPtr.Zero, ref dst, ref size, hdc, ref src, 0, ref blend, 2);

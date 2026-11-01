@@ -20,20 +20,22 @@ export const islandViews = [
   ['ai', 'AI Coding', 'Your Claude Code sessions with live status. When Claude asks permission, answer right here.'],
   ['weather', 'Weather', 'Feels-like, wind, UV, rain chance and the next 12 hours for your city.'],
   ['clipboard', 'Clipboard', 'Your last 30 copies and every new screenshot. Click to copy again, or drag out.'],
-  ['pomodoro', 'Pomodoro', 'Work and break sessions on a ring timer, counting down in the menu bar.'],
+  ['pomodoro', 'Pomodoro', 'A glowing ring and a big countdown. While it runs, the time shows in the menu bar.'],
   ['screentime', 'Screen Time', "Today's time per app and per category, kept on your PC."],
-  ['reminders', 'Reminders', 'Quick reminders with optional due times. A banner tells you when one is due.'],
+  ['reminders', 'Reminders', "How many you've done today, and quick reminders with optional due times."],
+  ['shelf', 'Shelf', 'Drop files on the notch to keep them handy, then drag them out wherever you need them.'],
   ['usage', 'Claude Usage', 'Your plan limits and tokens per day for the last week, by editor and model.'],
 ]
 
 export const heroSpecs = ['Windows 10 & 11', '20–40 MB of memory', '~0% CPU when idle', 'No admin rights', 'MIT licensed']
 
-// [kind, label, detail] for the collapsed island
+// [kind, title, detail, what's on the right] for the pills that spring out of the menu bar
 export const liveActivities = [
-  ['charge', 'Charging', '82%'],
-  ['download', 'Downloaded', 'report.pdf'],
-  ['timer', 'Focus', '24:12'],
-  ['meeting', 'Standup', 'in 5 min'],
+  ['charge', 'Charging', 'Charger connected', { level: .82, big: '82%' }],
+  ['headphones', 'AirBuds Pro', 'Connected · 70%', { level: .7, icon: true }],
+  ['timer', 'Pasta is ready', 'Timer · 12 min', { action: 'Again' }],
+  ['meeting', 'Standup', 'Starts in 5 min', { action: 'Join' }],
+  ['download', 'Downloaded', 'report.pdf', { action: 'Open' }],
 ]
 
 export const panels = [

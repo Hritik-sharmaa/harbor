@@ -170,22 +170,6 @@ namespace Harbor
         int outputsAt;
 
         /// <summary>A small pill with the sound output (speakers, headphones...); click it to switch to the next one.</summary>
-        void OutputPill(UI ui, float x, float y, float right, Fonts2 f)
-        {
-            // listed at most every few seconds while the Media tab is drawn (it redraws often while music plays)
-            if (outputs == null || unchecked(Environment.TickCount - outputsAt) > 5000) { outputs = AudioOutputs.List(); outputsAt = Environment.TickCount; }
-            var cur = outputs.Find(d => d.Default);
-            if (cur == null || outputs.Count < 2) return; // nothing to switch to
-            float w = Math.Min(right - x, PillWidth(ui, cur.Name, f.Small) + 18 * S);
-            if (w < 60 * S) return;
-            var r = new RectangleF(x, y, w, 20 * S);
-            ui.Fill(r, Color.FromArgb(Hover == "mout" ? 54 : 26, 255, 255, 255), r.Height / 2);
-            using (var gf = new Font(Fonts.Icons, 9.5f * S, GraphicsUnit.Pixel)) ui.Glyph("", new RectangleF(r.X + 4 * S, r.Y, 18 * S, r.Height), gf, f.Dim);
-            using (var sf = new StringFormat { LineAlignment = StringAlignment.Center, Trimming = StringTrimming.EllipsisCharacter, FormatFlags = StringFormatFlags.NoWrap })
-                ui.G.DrawString(cur.Name, f.Small, Hover == "mout" ? f.White : f.Dim, new RectangleF(r.X + 22 * S, r.Y, r.Width - 28 * S, r.Height), sf);
-            ui.AddHit("mout", r, () => { AudioOutputs.Next(); outputs = null; }, true);
-        }
-
         // ------------------------------------------------------------------ clipboard
 
         int clipFirst, clipFilter;
@@ -195,7 +179,6 @@ namespace Harbor
 
         void ClipboardTab(UI ui, RectangleF c, Fonts2 f)
         {
-            ui.Text("Clipboard", new RectangleF(c.X, c.Y - 2 * S, 200 * S, 22 * S), f.Title, f.White);
             if (!ClipboardHistory.On)
             {
                 var hint = new RectangleF(c.X, c.Y + 70 * S, c.Width, 40 * S);
@@ -206,7 +189,7 @@ namespace Harbor
             var list = ClipboardHistory.Items.FindAll(i => clipFilter == 0 || (clipFilter == 1 ? i.Kind == "text" : i.Kind == "image"));
 
             // header: count, paging, filters, clear
-            float tx = c.X + ui.G.MeasureString("Clipboard", f.Title).Width + 10 * S;
+            float tx = c.X;
             ui.Text(list.Count == 0 ? "" : list.Count + (list.Count == 1 ? " item" : " items"), new RectangleF(tx, c.Y, 120 * S, 18 * S), f.Small, f.Faint);
             float left = Chips(ui, c.Right - 34 * S, c.Y - 2 * S, clipFilters, clipFilter, "clipf", i => { clipFilter = i; clipFirst = 0; }, f);
             if (ClipboardHistory.Items.Count > 0)
@@ -321,8 +304,7 @@ namespace Harbor
         void ShelfTab(UI ui, RectangleF c, Fonts2 f)
         {
             var list = Shelf.Items;
-            ui.Text("Shelf", new RectangleF(c.X, c.Y - 2 * S, 200 * S, 22 * S), f.Title, f.White);
-            float tx = c.X + ui.G.MeasureString("Shelf", f.Title).Width + 10 * S;
+            float tx = c.X;
             ui.Text(list.Count == 0 ? "" : list.Count + (list.Count == 1 ? " file" : " files"), new RectangleF(tx, c.Y, 120 * S, 18 * S), f.Small, f.Faint);
 
             var area = new RectangleF(c.X, c.Y + 32 * S, c.Width, c.Bottom - c.Y - 32 * S);
@@ -369,9 +351,9 @@ namespace Harbor
                     ui.AddHit(xid, x, () => Shelf.Remove(p), true);
                 }
             }
-            // files being dragged over a full shelf: light up the whole area
-            if (dropHover)
-                using (var pen = new Pen(Color.FromArgb(200, 255, 255, 255), 1.6f * S) { DashPattern = new[] { 4f, 3f } })
+            // the shelf's dashed edge, lit up while files are dragged over it
+            float lit = Spring("shelfdrop", dropHover ? 1 : 0, 400, 26);
+            using (var pen = new Pen(Color.FromArgb((int)(55 + 150 * lit), 255, 255, 255), (1.2f + 0.6f * lit) * S) { DashPattern = new[] { 4f, 3f } })
                 using (var path = Gfx.RoundRect(RectangleF.Inflate(area, 2 * S, 2 * S), 14 * S))
                     ui.G.DrawPath(pen, path);
         }
@@ -396,7 +378,6 @@ namespace Harbor
             ClaudeUsage.Refresh();
             var now = DateTime.Now;
             float lw = 286 * S;
-            ui.Text("Claude usage", new RectangleF(c.X, c.Y - 2 * S, lw, 22 * S), f.Title, f.White);
             if (!ClaudeUsage.Loaded)
             {
                 ui.Text("Reading Claude Code's files…", new RectangleF(c.X, c.Y + 80 * S, c.Width, 20 * S), f.Body, f.Faint, 1);

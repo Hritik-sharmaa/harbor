@@ -58,6 +58,7 @@ namespace Harbor
                 cp.Style = N.WS_POPUP | (WindowMode ? 0x00020000 /*WS_MINIMIZEBOX*/ : 0);
                 cp.ExStyle |= WindowMode ? N.WS_EX_APPWINDOW : (N.WS_EX_TOOLWINDOW | N.WS_EX_TOPMOST);
                 if (NoActivate) cp.ExStyle |= N.WS_EX_NOACTIVATE;
+                if (Layered) cp.ExStyle |= N.WS_EX_LAYERED;
                 // the classic square shadow would poke out past the glass panels' round corners
                 if (WindowMode) cp.ClassStyle |= 0x20000; // CS_DROPSHADOW
                 return cp;
@@ -79,6 +80,9 @@ namespace Harbor
 
         /// <summary>The island paints its own glass and notch shape.</summary>
         protected virtual bool OwnGlass { get { return false; } }
+
+        /// <summary>A per-pixel-alpha window: the panel draws its own (anti-aliased) shape on a clear surface.</summary>
+        protected virtual bool Layered { get { return false; } }
 
         /// <summary>Drawn dark whatever the theme (the island is black, like a real notch). Every other panel follows light/dark.</summary>
         protected virtual bool AlwaysDark { get { return false; } }
@@ -248,7 +252,7 @@ namespace Harbor
         void Paint(Graphics g, bool place, int maxH)
         {
             bool glass = !WindowMode && !OwnGlass;
-            g.Clear(acrylic ? Color.Transparent : Theme.PanelSolid);
+            g.Clear(acrylic || Layered ? Color.Transparent : Theme.PanelSolid);
             g.SmoothingMode = SmoothingMode.AntiAlias;
             g.PixelOffsetMode = PixelOffsetMode.Half;
             g.InterpolationMode = InterpolationMode.HighQualityBicubic;
@@ -272,7 +276,8 @@ namespace Harbor
                 H = newH;
                 Place();
             }
-            Invalidate();
+            if (Layered) { if (IsHandleCreated) surf.Present(Handle, Left, Top, W, H); }
+            else Invalidate();
         }
 
         void Place()
@@ -430,6 +435,8 @@ namespace Harbor
         readonly List<Hit> hits;
         public readonly Font Body, Bold, Small, Icon, BigIcon, Title;
         public readonly SolidBrush TextBrush, DimBrush;
+        /// <summary>Plain flat tiles instead of glass (the island's clean black look).</summary>
+        public bool Flat;
         readonly StringFormat left, center, right;
 
         public UI(Flyout f, Graphics g, float s, float w, List<Hit> hits)
@@ -486,6 +493,12 @@ namespace Harbor
         /// On light glass it's a whiter, near-solid tile with a soft grey edge.</summary>
         public void Glass(RectangleF r, float radius, int fill = 12, int edge = 26)
         {
+            if (Flat)
+            {
+                using (var p = Gfx.RoundRect(r, radius))
+                using (var b = new SolidBrush(Color.FromArgb(Math.Min(255, 16 + fill), 255, 255, 255))) G.FillPath(b, p);
+                return;
+            }
             if (!Theme.Dark)
             {
                 using (var p = Gfx.RoundRect(r, radius))
@@ -683,12 +696,14 @@ namespace Harbor
         {
             var r = new RectangleF(Pad + 8 * S, Y + 4 * S, (Right - Pad) - 16 * S, 30 * S);
             bool focus = f.FocusField == id;
-            Fill(r, Theme.Dark ? Color.FromArgb(60, 0, 0, 0) : Color.FromArgb(220, 255, 255, 255), 7 * S);
-            using (var pen = new Pen(focus ? Theme.Accent : Theme.TileBorder, focus ? 2 * S : 1))
-            using (var p = Gfx.RoundRect(r, 7 * S)) G.DrawPath(pen, p);
+            float rad = Flat ? r.Height / 2 : 7 * S;
+            Fill(r, Flat ? Color.FromArgb(34, 255, 255, 255) : Theme.Dark ? Color.FromArgb(60, 0, 0, 0) : Color.FromArgb(220, 255, 255, 255), rad);
+            if (focus || !Flat)
+                using (var pen = new Pen(focus ? Theme.Accent : Theme.TileBorder, focus ? 2 * S : 1))
+                using (var p = Gfx.RoundRect(r, rad)) G.DrawPath(pen, p);
             string v = f.Field(id);
             string shown = password ? new string('•', v.Length) : v;
-            var tr = new RectangleF(r.X + 10 * S, r.Y, r.Width - 20 * S, r.Height);
+            var tr = new RectangleF(r.X + (Flat ? 14 : 10) * S, r.Y, r.Width - (Flat ? 28 : 20) * S, r.Height);
             if (v.Length == 0) Text(placeholder, tr, Body, DimBrush);
             else Text(shown, tr, Body, TextBrush);
             if (focus)

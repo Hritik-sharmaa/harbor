@@ -82,6 +82,35 @@ namespace Harbor
                 g.FillRectangle(shade, r);
         }
 
+        /// <summary>The cover's colours glowing up from the bottom of a black panel (the island's Media page).</summary>
+        public void Wash(Graphics g, RectangleF r)
+        {
+            if (Media.Art == null) return;
+            if (ambientSrc != Media.Art)
+            {
+                if (ambient != null) ambient.Dispose();
+                ambient = Gfx.Scale(Media.Art, 6);
+                ambientSrc = Media.Art;
+            }
+            var mode = g.InterpolationMode;
+            g.InterpolationMode = InterpolationMode.HighQualityBilinear;
+            using (var ia = new System.Drawing.Imaging.ImageAttributes())
+            {
+                ia.SetWrapMode(WrapMode.TileFlipXY);
+                g.DrawImage(ambient, Rectangle.Round(RectangleF.Inflate(r, r.Width * 0.15f, r.Height * 0.15f)), 0, 0, ambient.Width, ambient.Height, GraphicsUnit.Pixel, ia);
+            }
+            g.InterpolationMode = mode;
+            // black over the top, thinning toward the bottom where the colour shows
+            using (var shade = new LinearGradientBrush(new RectangleF(r.X, r.Y - 2, r.Width, r.Height + 4), Color.Black, Color.Black, 90f))
+            {
+                var blend = new ColorBlend(3);
+                blend.Colors = new[] { Color.FromArgb(255, 0, 0, 0), Color.FromArgb(240, 0, 0, 0), Color.FromArgb(120, 0, 0, 0) };
+                blend.Positions = new[] { 0f, 0.5f, 1f };
+                shade.InterpolationColors = blend;
+                g.FillRectangle(shade, r);
+            }
+        }
+
         public void Cover(UI ui, RectangleF art, float radius)
         {
             float S = ui.S;
@@ -113,6 +142,30 @@ namespace Harbor
                 ui.Text("-" + Clock(Media.Duration - at), new RectangleF(x + w - 80 * S, y + 14 * S, 80 * S, 16 * S), small, fb, 2);
             }
         }
+
+        /// <summary>Elapsed · bar · remaining on one line (the island's compact look). Drag or click the bar to seek.</summary>
+        public void ProgressRow(UI ui, Flyout host, float x, float y, float w, Font font)
+        {
+            float S = ui.S, tw = 48 * S;
+            var bar = new RectangleF(x + tw, y - 2.5f * S, w - 2 * tw, 5 * S);
+            float v = scrub >= 0 ? scrub : (float)(Media.Position.TotalSeconds / Media.Duration.TotalSeconds);
+            v = Math.Max(0, Math.Min(1, v));
+            bool hot = host.Hover == "seek" || host.Dragging == "seek";
+            if (hot) bar = RectangleF.Inflate(bar, 0, 1.5f * S);
+            ui.Fill(bar, Color.FromArgb(55, 255, 255, 255), bar.Height / 2);
+            ui.Fill(new RectangleF(bar.X, bar.Y, Math.Max(bar.Height, bar.Width * v), bar.Height), Color.FromArgb(hot ? 255 : 235, 255, 255, 255), bar.Height / 2);
+            var hit = ui.AddHit("seek", new RectangleF(bar.X - 6 * S, bar.Y - 9 * S, bar.Width + 12 * S, bar.Height + 18 * S), null);
+            hit.Track = new RectangleF(bar.X, bar.Y, bar.Width, 0);
+            hit.Slide = f => scrub = f;
+            var at = TimeSpan.FromTicks((long)(Media.Duration.Ticks * v));
+            using (var wb = new SolidBrush(White))
+            {
+                ui.Text(Clock(at), new RectangleF(x, y - 10 * S, tw, 20 * S), font, wb);
+                ui.Text("-" + Clock(Media.Duration - at), new RectangleF(x + w - tw - 4 * S, y - 10 * S, tw + 4 * S, 20 * S), font, wb, 2);
+            }
+        }
+
+        public void ToggleLyrics() { Look.Set("Lyrics", !Look.Bool("Lyrics")); Settings.Save(); snap = true; }
 
         /// <summary>Previous / play-pause / next around (cx, cy). 'size' scales the whole group (1 = 52 px play button).</summary>
         public void Controls(UI ui, Flyout host, float cx, float cy, float size = 1)

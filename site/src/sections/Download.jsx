@@ -2,6 +2,7 @@ import { useRef } from 'react'
 import { calm, gsap, useGSAP } from '../lib/motion'
 import { DL, GH, installSteps } from '../content'
 import { Words } from '../components/ui'
+import DownloadCount from '../components/DownloadCount'
 import './Download.css'
 
 export default function Download() {
@@ -27,6 +28,7 @@ export default function Download() {
             <a className="btn" href={DL}>Download Harbor</a>
             <a className="btn ghost" href={`${GH}#build-from-source`}>Build from source</a>
           </div>
+          <DownloadCount className="cta-count" suffix="downloads and counting" />
           <p className="fine">Windows 10 (1903 or later) or Windows 11. Free and open source.</p>
         </div>
       </div>

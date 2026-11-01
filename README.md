@@ -83,7 +83,7 @@ Most dock replacements are web apps that run a whole browser in the background. 
 
 ### The island
 
-Rest the mouse on the centre of the menu bar and a dark panel drops down, like a notch. It never takes keyboard focus from the app you're typing in, and it closes when the mouse moves away.
+Rest the mouse on the centre of the menu bar and a black notch springs down out of it. The header shows the page you're on, your battery, the date and time, and sound bars that dance while music plays. Page dots at the bottom, the arrows at the sides, ←/→ or a sideways swipe on a touchpad move between pages. It never takes keyboard focus from the app you're typing in, and it folds away when the mouse leaves.
 
 <p>
   <img src="docs/screenshots/island_dashboard.png" alt="Island: Dashboard" width="49%">
@@ -91,7 +91,8 @@ Rest the mouse on the centre of the menu bar and a dark panel drops down, like a
   <img src="docs/screenshots/island_ai.png" alt="Island: AI Coding with a Claude Code permission request" width="49%">
   <img src="docs/screenshots/island_weather.png" alt="Island: Weather" width="49%">
   <img src="docs/screenshots/island_clipboard.png" alt="Island: Clipboard history with a screenshot" width="49%">
-  <img src="docs/screenshots/island_usage.png" alt="Island: Claude usage limits and the last 7 days" width="49%">
+  <img src="docs/screenshots/island_pomodoro.png" alt="Island: Pomodoro" width="49%">
+  <img src="docs/screenshots/island_reminders.png" alt="Island: Reminders" width="49%">
 </p>
 
 | Tab | What's in it |
@@ -99,11 +100,11 @@ Rest the mouse on the centre of the menu bar and a dark panel drops down, like a
 | **Dashboard** | Reminders, your most-used apps today, quick toggles (Focus, dark mode, Wi‑Fi, Bluetooth, keep awake, screenshot, lock), Pomodoro, day progress and weather |
 | **Media** | Cover, seek bar and controls, with synced lyrics beside them. After the app closes: the last song, with Play to pick it up again |
 | **Calendar** | Your next meeting with **Join**, and today's and tomorrow's agenda, from your calendar's private iCal link (Google or Outlook) |
-| **Pomodoro** | Ring timer with Work / Short break / Long break, sessions today, a focus target (one of your reminders) and day progress. While it runs, the time shows in the centre of the menu bar |
+| **Pomodoro** | A glowing ring and a big countdown, with Work / Short break / Long break, sessions today and a focus target (one of your reminders). While it runs, the time shows in the centre of the menu bar |
 | **Timers** | Quick and custom timers (the soonest counts down in the menu bar), alarms, and world clocks |
 | **Weather** | Now, feels-like, humidity, wind, UV, rain chance, pressure and the next 12 hours, from [Open-Meteo](https://open-meteo.com) for the city you set |
 | **Screen Time** | Today's time per app and per category, counted and kept on your PC |
-| **Reminders** | Quick reminders with optional due times; a banner tells you when one is due |
+| **Reminders** | How many you've done today, quick reminders with optional due times, and the ones you finished today struck through in green; a banner tells you when one is due |
 | **Notes** | Short notes you jot down; click to copy, pin the ones you reuse |
 | **Clipboard** | Your last 30 copies (text, links, images, files) and every new screenshot. Click to copy again, drag images and files out |
 | **Shelf** | Drag files onto the centre of the menu bar to keep them here, then drag them out wherever you need them |
@@ -113,7 +114,12 @@ Rest the mouse on the centre of the menu bar and a dark panel drops down, like a
 
 Set your city, working hours, Pomodoro lengths and the Claude Code link in **Harbor → General → Island**. Pick which tabs show, and their order, in **Notch tabs**. **Alt+Win+Space** opens the notch from the keyboard (←/→ or 1–9 switch tabs), and **Alt+Win+V** opens the clipboard (↑/↓ and Enter paste).
 
-**Live activities:** a small pill drops out of the menu bar for a few seconds when something happens: charging, headphones connected, a download finished, a screenshot, a timer or alarm, or a meeting in 5 minutes (with Join). It can also remind you to rest your eyes, stand up or drink water.
+**Live activities:** a small black pill springs out of the menu bar for a few seconds when something happens: charging (with the level in a ring and a big percentage), headphones connected (with their battery), a download finished, a screenshot, a timer or alarm (with Again), or a meeting in 5 minutes (with Join). It can also remind you to rest your eyes, stand up or drink water.
+
+<p>
+  <img src="docs/screenshots/live_charging.png" alt="Live activity: charging" width="49%">
+  <img src="docs/screenshots/live_headphones.png" alt="Live activity: headphones connected" width="49%">
+</p>
 
 **Claude Code approvals** work through a [hook](https://code.claude.com/docs/en/hooks): switching them on adds `Harbor.exe --claude-hook` to `%USERPROFILE%\.claude\settings.json` (backed up first, your other hooks untouched). It applies to Claude Code in the terminal, VS Code and other editors. Whichever answers first wins: the island or the editor's own prompt. If Harbor isn't running or you don't answer, Claude Code simply asks you as usual. Switching it off, or uninstalling Harbor, removes the hook again.
 
@@ -208,7 +214,7 @@ bin\Harbor.exe --install
 | `src/SettingsWindow.cs`, `src/Look.cs`, `src/Settings.cs` | The Harbor app and `settings.ini` |
 | `src/ShellIcons.cs` | Icon loading and the WhiteSur-style icon renderer |
 | `src/SystemStatus.cs`, `src/SysInfo.cs`, `src/BtBattery.cs`, `src/WinRT.cs` | Wi‑Fi, audio, brightness, stats, Bluetooth, media and notifications |
-| `src/Island.cs`, `src/IslandMore.cs`, `src/NowPlaying.cs` | The island and its tabs; the Now Playing view shared with the media panel |
+| `src/Island.cs`, `src/IslandStyle.cs`, `src/IslandMore.cs`, `src/IslandTabs.cs`, `src/IslandDashboard.cs`, `src/NowPlaying.cs` | The island: its shape and springs, its pages, and the Now Playing view shared with the media panel |
 | `src/ClipboardHistory.cs`, `src/Shelf.cs`, `src/ClaudeUsage.cs` | Clipboard history, the file shelf, Claude usage |
 | `src/Pomodoro.cs`, `src/Weather.cs`, `src/ScreenTime.cs`, `src/Reminders.cs` | Pomodoro timer, Open-Meteo weather and icons, Screen Time tracking, reminders |
 | `src/ClaudeBridge.cs`, `src/ClaudeHistory.cs` | Claude Code hook, local pipe and settings edit; reading session history |
