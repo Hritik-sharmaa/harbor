@@ -262,6 +262,14 @@ namespace Harbor
             return e.Bmps;
         }
 
+        /// <summary>--mem-report: icons held and their pixel bytes.</summary>
+        public static string Report()
+        {
+            long bytes = 0; int n = 0;
+            foreach (var e in map.Values) if (e.Bmps != null) foreach (var b in e.Bmps) if (b != null) { bytes += (long)b.Width * b.Height * 4; n++; }
+            return map.Count + " entries, " + n + " bitmaps, " + bytes / 1024 + " KB";
+        }
+
         static bool IsImage(string p)
         {
             string e = Path.GetExtension(p).ToLowerInvariant();
@@ -862,6 +870,10 @@ namespace Harbor
     /// <summary>A 32bpp premultiplied DIB section with a GDI+ Graphics over it. Zero-copy presentation.</summary>
     sealed class Surface : IDisposable
     {
+        /// <summary>--mem-report: bytes held by every live surface right now.</summary>
+        public static long LiveBytes;
+        public static int LiveCount;
+        public static readonly List<Surface> Live = new List<Surface>();
         public int W, H;
         public Graphics G;
         IntPtr hdc, hbmp, oldBmp;
@@ -873,6 +885,7 @@ namespace Harbor
             if (w == W && h == H && G != null) return false;
             Dispose();
             W = w; H = h;
+            LiveBytes += (long)w * h * 4; LiveCount++; Live.Add(this);
             var bi = new BITMAPINFO();
             bi.h.biSize = Marshal.SizeOf(typeof(BITMAPINFOHEADER));
             bi.h.biWidth = w;
@@ -923,6 +936,7 @@ namespace Harbor
                 N.DeleteObject(hbmp);
                 N.DeleteDC(hdc);
                 hdc = IntPtr.Zero;
+                LiveBytes -= (long)W * H * 4; LiveCount--; Live.Remove(this);
             }
             W = H = 0;
         }

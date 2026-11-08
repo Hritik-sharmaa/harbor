@@ -33,6 +33,7 @@ namespace Harbor
         public static readonly int OpenControlCenter = N.RegisterWindowMessage("Harbor_ControlCenter");
         public static readonly int OpenSettings = N.RegisterWindowMessage("Harbor_OpenSettings");
         public static readonly int PillDemo = N.RegisterWindowMessage("Harbor_PillDemo");
+        public static readonly int MemReport = N.RegisterWindowMessage("Harbor_MemReport");
 
         public Host() { CreateHandle(new CreateParams { Caption = "HarborHost" }); }
 
@@ -43,6 +44,7 @@ namespace Harbor
             if (m.Msg == OpenControlCenter) { ControlCenter.ToggleOnPrimary(); return; }
             if (m.Msg == OpenSettings) { SettingsWindow.ShowWindow(); return; }
             if (m.Msg == PillDemo) { LiveActivity.Demo(); return; }
+            if (m.Msg == MemReport) { App.WriteMemReport(m.WParam.ToInt32() != 0); return; }
             if (m.Msg == 0x312 /*WM_HOTKEY*/) { App.OnHotkey(m.WParam.ToInt32()); return; }
             if (m.Msg == taskbarCreated)
             {
@@ -678,6 +680,30 @@ namespace Harbor
             m.Add("Quit Harbor", Quit);
         }
 
+        [System.Runtime.InteropServices.DllImport("user32.dll")] static extern int GetGuiResources(IntPtr process, int flags);
+        [System.Runtime.InteropServices.DllImport("kernel32.dll")] static extern int GetProcessHeaps(int count, IntPtr[] heaps);
+        [System.Runtime.InteropServices.DllImport("kernel32.dll")] static extern UIntPtr HeapCompact(IntPtr heap, uint flags);
+
+        /// <summary>--mem-report [--trim]: what Harbor holds, written to %TEMP%harbor-mem.txt (no personal data).</summary>
+        public static void WriteMemReport(bool trimFirst)
+        {
+            if (trimFirst) Trim();
+            var p = System.Diagnostics.Process.GetCurrentProcess();
+            p.Refresh();
+            var sb = new System.Text.StringBuilder();
+            sb.AppendLine(DateTime.Now.ToString("s"));
+            sb.AppendLine("private bytes   " + p.PrivateMemorySize64 / 1048576 + " MB");
+            sb.AppendLine("working set     " + p.WorkingSet64 / 1048576 + " MB (peak " + p.PeakWorkingSet64 / 1048576 + ")");
+            sb.AppendLine(".NET heap       " + GC.GetTotalMemory(false) / 1048576 + " MB  (gen0 " + GC.CollectionCount(0) + ", gen2 " + GC.CollectionCount(2) + ")");
+            sb.AppendLine("surfaces        " + Surface.LiveCount + " live, " + Surface.LiveBytes / 1024 + " KB");
+            foreach (var s in Surface.Live) sb.AppendLine("                  " + s.W + " x " + s.H);
+            sb.AppendLine("dock icons      " + IconCache.Report());
+            sb.AppendLine("GDI / USER      " + GetGuiResources(p.Handle, 0) + " / " + GetGuiResources(p.Handle, 1));
+            sb.AppendLine("handles/threads " + p.HandleCount + " / " + p.Threads.Count);
+            sb.AppendLine("forms           " + Application.OpenForms.Count);
+            try { System.IO.File.AppendAllText(System.IO.Path.Combine(System.IO.Path.GetTempPath(), "harbor-mem.txt"), sb + Environment.NewLine); } catch { }
+        }
+
         public static void Trim()
         {
             try
@@ -685,6 +711,10 @@ namespace Harbor
                 GC.Collect();
                 GC.WaitForPendingFinalizers();
                 GC.Collect();
+                // native heaps keep freed blocks (icon loading, GDI+ scratch bitmaps): hand them back to Windows
+                var heaps = new IntPtr[64];
+                int nh = GetProcessHeaps(heaps.Length, heaps);
+                for (int i = 0; i < Math.Min(nh, heaps.Length); i++) HeapCompact(heaps[i], 0);
                 N.SetProcessWorkingSetSize(N.GetCurrentProcess(), new IntPtr(-1), new IntPtr(-1));
             }
             catch { }
@@ -1006,11 +1036,11 @@ namespace Harbor
                     Installer.DeleteFilesAfterExit();
                     return;
                 }
-                if (Array.IndexOf(args, "--quit") >= 0 || Array.IndexOf(args, "--cc") >= 0 || Array.IndexOf(args, "--pill-demo") >= 0)
+                if (Array.IndexOf(args, "--quit") >= 0 || Array.IndexOf(args, "--cc") >= 0 || Array.IndexOf(args, "--pill-demo") >= 0 || Array.IndexOf(args, "--mem-report") >= 0)
                 {
                     IntPtr host = N.FindWindow(null, "HarborHost");
                     if (host != IntPtr.Zero)
-                        N.PostMessage(host, Array.IndexOf(args, "--quit") >= 0 ? N.WM_CLOSE : Array.IndexOf(args, "--cc") >= 0 ? Host.OpenControlCenter : Host.PillDemo, IntPtr.Zero, IntPtr.Zero);
+                        N.PostMessage(host, Array.IndexOf(args, "--quit") >= 0 ? N.WM_CLOSE : Array.IndexOf(args, "--cc") >= 0 ? Host.OpenControlCenter : Array.IndexOf(args, "--mem-report") >= 0 ? Host.MemReport : Host.PillDemo, new IntPtr(Array.IndexOf(args, "--trim") >= 0 ? 1 : 0), IntPtr.Zero);
                     return;
                 }
                 if (!created && Array.IndexOf(args, "--snapshot") < 0)

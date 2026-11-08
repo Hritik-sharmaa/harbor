@@ -208,6 +208,7 @@ namespace Harbor
             var c = closed;
             closed = null;
             if (c != null) c();
+            surf.Dispose(); // drawn again from scratch next time it opens
             App.ScheduleTrim();
         }
 
@@ -240,7 +241,7 @@ namespace Harbor
         {
             W = (int)Math.Round(LogicalWidth * S);
             int maxH = (int)Math.Round(Math.Max(MaxLogicalHeight, FixedLogicalHeight) * S);
-            surf.Ensure(W, Math.Max(maxH, contentH) + 2);
+            surf.Ensure(W, maxH + 2); // only what's on screen: scrolled content is drawn shifted, the rest falls off the edge
             var g = surf.G;
             g.ResetTransform();
             bool userDark = Theme.Dark;
@@ -266,7 +267,6 @@ namespace Harbor
             g.ResetTransform();
             int newContent = (int)Math.Ceiling(ui.Y + 8 * S);
             int newH = FixedLogicalHeight > 0 ? (int)Math.Round(FixedLogicalHeight * S) : Math.Min(maxH, newContent);
-            if (newContent > surf.H - 2) { contentH = newContent; Render(place); return; }
             if (glass && newH != glassH) { glassH = newH; Render(place); return; } // repaint the glass for the new height
             if (glass) PaintRim(g, W, newH);
             contentH = newContent;

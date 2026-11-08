@@ -103,26 +103,57 @@ namespace Harbor
         }
 
         public static int TempC = -1;
-        static System.Diagnostics.PerformanceCounter tempCounter;
+        static IntPtr tempQuery, tempCounter;
         static bool tempUnavailable;
 
-        /// <summary>CPU / chassis temperature from the ACPI thermal zone (readable without admin rights).</summary>
+        [System.Runtime.InteropServices.DllImport("pdh.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+        static extern int PdhOpenQuery(string source, IntPtr user, out IntPtr query);
+        [System.Runtime.InteropServices.DllImport("pdh.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+        static extern int PdhAddEnglishCounter(IntPtr query, string path, IntPtr user, out IntPtr counter);
+        [System.Runtime.InteropServices.DllImport("pdh.dll")]
+        static extern int PdhCollectQueryData(IntPtr query);
+        [System.Runtime.InteropServices.DllImport("pdh.dll", CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
+        static extern int PdhGetFormattedCounterArray(IntPtr counter, uint format, ref uint bytes, out uint count, IntPtr items);
+
+        /// <summary>
+        /// CPU / chassis temperature from the ACPI thermal zone (readable without admin rights). Asks PDH for this one
+        /// counter: .NET's PerformanceCounter classes load Windows' whole counter catalogue first (~9 MB, ~2.5 s).
+        /// </summary>
         static void SampleTemp()
         {
             if (tempUnavailable || Demo) return;
             try
             {
-                if (tempCounter == null)
+                if (tempQuery == IntPtr.Zero)
                 {
-                    var cat = new System.Diagnostics.PerformanceCounterCategory("Thermal Zone Information");
-                    string[] inst = cat.GetInstanceNames();
-                    if (inst.Length == 0) { tempUnavailable = true; return; }
-                    Array.Sort(inst); // prefer the main CPU zone (\_TZ.THRM / CPUZ...) - first is fine on most laptops
-                    tempCounter = new System.Diagnostics.PerformanceCounter("Thermal Zone Information", "High Precision Temperature", inst[0], true);
+                    if (PdhOpenQuery(null, IntPtr.Zero, out tempQuery) != 0
+                        || PdhAddEnglishCounter(tempQuery, @"\Thermal Zone Information(*)\High Precision Temperature", IntPtr.Zero, out tempCounter) != 0)
+                    { tempUnavailable = true; return; }
                 }
-                float tenthsKelvin = tempCounter.NextValue();
-                int c = (int)Math.Round(tenthsKelvin / 10f - 273.15f);
-                TempC = c > 0 && c < 120 ? c : -1;
+                if (PdhCollectQueryData(tempQuery) != 0) return;
+                uint bytes = 0, count;
+                PdhGetFormattedCounterArray(tempCounter, 0x200 /*PDH_FMT_DOUBLE*/, ref bytes, out count, IntPtr.Zero);
+                if (bytes == 0) { tempUnavailable = true; return; }
+                IntPtr buf = System.Runtime.InteropServices.Marshal.AllocHGlobal((int)bytes);
+                try
+                {
+                    if (PdhGetFormattedCounterArray(tempCounter, 0x200, ref bytes, out count, buf) != 0 || count == 0) return;
+                    // PDH_FMT_COUNTERVALUE_ITEM: name pointer, then status and a double at offset 16 (24 bytes, x86 and x64).
+                    // Prefer the first zone by name (\_TZ.THRM / CPUZ...), which is the CPU zone on most laptops.
+                    string best = null; double value = 0;
+                    for (int i = 0; i < count; i++)
+                    {
+                        IntPtr item = new IntPtr(buf.ToInt64() + i * 24);
+                        string name = System.Runtime.InteropServices.Marshal.PtrToStringUni(System.Runtime.InteropServices.Marshal.ReadIntPtr(item));
+                        if (System.Runtime.InteropServices.Marshal.ReadInt32(item, 8) != 0) continue; // status not OK
+                        if (best == null || string.CompareOrdinal(name, best) < 0)
+                        { best = name; value = BitConverter.Int64BitsToDouble(System.Runtime.InteropServices.Marshal.ReadInt64(item, 16)); }
+                    }
+                    if (best == null) return;
+                    int c = (int)Math.Round(value / 10 - 273.15); // tenths of a kelvin
+                    TempC = c > 0 && c < 120 ? c : -1;
+                }
+                finally { System.Runtime.InteropServices.Marshal.FreeHGlobal(buf); }
             }
             catch { tempUnavailable = true; TempC = -1; }
         }

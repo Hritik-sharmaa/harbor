@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.4.1 — 2026-11-08 (preview)
+
+**Less memory**
+- **Claude Code transcripts are read as bytes.** The Claude Usage and AI Coding pages count tokens from Claude Code's transcripts, which can be hundreds of MB a week. They used to be decoded into text a megabyte at a time, with a copy of every line, which caused memory spikes over 100 MB and hundreds of full garbage collections. Now only the timestamp, model and token numbers are decoded: the same totals, 3× faster, a fraction of the memory.
+- **The menu bar temperature reads one counter.** .NET's performance-counter classes loaded Windows' whole counter catalogue first (about 9 MB and 2.5 s at every start). Harbor now asks Windows for the thermal-zone counter alone.
+- **Panels hold only what's on screen,** and free it when they close. The Harbor window used to keep its whole scrolling page in memory (about 9 MB) even after closing.
+- When Harbor tidies up, freed native memory (icon loading, drawing) goes back to Windows too.
+- `Harbor.exe --mem-report` writes what Harbor is holding to `%TEMP%\harbor-mem.txt`.
+
+**Notification Center**
+- **Cleared notifications stay cleared.** Windows lets Harbor read notifications but usually not delete them, so they came back the next time the panel opened. Harbor now remembers what you cleared (Clear All, or closing one) and keeps it hidden, also after a restart.
+- **Only the newest 5 show,** with a "Show N more" button for the rest.
+
+
 ## 0.4.0 — 2026-11-01 (preview)
 
 **A new notch**

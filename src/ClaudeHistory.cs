@@ -20,7 +20,7 @@ namespace Harbor
             public long Tokens;
             public DateTime LastActive;
             internal long Offset;
-            internal string LastMsgId, Partial = "";
+            internal string LastMsgId;
             public string Project { get { return string.IsNullOrEmpty(Cwd) ? "Claude Code" : Path.GetFileName(Cwd.TrimEnd('\\', '/')); } }
         }
 
@@ -94,72 +94,46 @@ namespace Harbor
             });
         }
 
-        static readonly Regex rxType = new Regex("\"type\":\"(user|assistant|ai-title)\""),
-            rxCwd = new Regex("\"cwd\":\"((?:[^\"\\\\]|\\\\.)*)\""),
-            rxBranch = new Regex("\"gitBranch\":\"((?:[^\"\\\\]|\\\\.)*)\""),
-            rxModel = new Regex("\"model\":\"(claude-[^\"]+)\""),
-            rxMsgId = new Regex("\"id\":\"(msg_[^\"]+)\""),
-            rxTitle = new Regex("\"aiTitle\":\"((?:[^\"\\\\]|\\\\.)*)\""),
-            rxIn = new Regex("\"input_tokens\":(\\d+)"),
-            rxOut = new Regex("\"output_tokens\":(\\d+)"),
-            rxCacheNew = new Regex("\"cache_creation_input_tokens\":(\\d+)");
+        static readonly byte[] kUser = JsonlScan.Bytes("\"type\":\"user\""), kAssistant = JsonlScan.Bytes("\"type\":\"assistant\""),
+            kTitleType = JsonlScan.Bytes("\"type\":\"ai-title\""), kCwd = JsonlScan.Bytes("\"cwd\":\""), kBranch = JsonlScan.Bytes("\"gitBranch\":\""),
+            kModel = JsonlScan.Bytes("\"model\":\"claude-"), kMsgId = JsonlScan.Bytes("\"id\":\"msg_"), kTitle = JsonlScan.Bytes("\"aiTitle\":\""),
+            kIn = JsonlScan.Bytes("\"input_tokens\":"), kOut = JsonlScan.Bytes("\"output_tokens\":"), kCacheNew = JsonlScan.Bytes("\"cache_creation_input_tokens\":");
 
         /// <summary>Reads what was appended since last time.</summary>
         static void Read(Entry e, FileInfo f)
         {
-            if (f.Length < e.Offset) { e.Offset = 0; e.Messages = 0; e.Tokens = 0; e.Partial = ""; } // rewritten
+            if (f.Length < e.Offset) { e.Offset = 0; e.Messages = 0; e.Tokens = 0; } // rewritten
             e.LastActive = f.LastWriteTime;
             if (f.Length == e.Offset) return;
-            using (var fs = new FileStream(f.FullName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
-            {
-                fs.Seek(e.Offset, SeekOrigin.Begin);
-                var buf = new byte[1 << 20];
-                int n;
-                while ((n = fs.Read(buf, 0, buf.Length)) > 0)
-                {
-                    string chunk = e.Partial + Encoding.UTF8.GetString(buf, 0, n);
-                    int start = 0, nl;
-                    while ((nl = chunk.IndexOf('\n', start)) >= 0) { Line(e, chunk.Substring(start, nl - start)); start = nl + 1; }
-                    e.Partial = chunk.Substring(start);
-                    e.Offset += n;
-                }
-            }
+            e.Offset = JsonlScan.Read(f.FullName, e.Offset, (b, a, z) => Line(e, b, a, z));
         }
 
-        static void Line(Entry e, string line)
+        static void Line(Entry e, byte[] b, int a, int z)
         {
-            var t = rxType.Match(line);
-            if (!t.Success) return;
-            Match m;
-            if ((m = rxCwd.Match(line)).Success) e.Cwd = Unescape(m.Groups[1].Value);
-            if ((m = rxBranch.Match(line)).Success && m.Groups[1].Value != "") e.Branch = Unescape(m.Groups[1].Value);
-            switch (t.Groups[1].Value)
+            // the line's kind is its first "type" of these three (nested content has other types)
+            int pu = JsonlScan.Find(b, a, z, kUser), pa = JsonlScan.Find(b, a, z, kAssistant), pt = JsonlScan.Find(b, a, z, kTitleType);
+            int first = -1; string kind = null;
+            if (pu >= 0) { first = pu; kind = "user"; }
+            if (pa >= 0 && (first < 0 || pa < first)) { first = pa; kind = "assistant"; }
+            if (pt >= 0 && (first < 0 || pt < first)) { first = pt; kind = "ai-title"; }
+            if (kind == null) return;
+            string v;
+            if ((v = JsonlScan.Str(b, a, z, kCwd)) != null) e.Cwd = v;
+            if ((v = JsonlScan.Str(b, a, z, kBranch)) != null && v != "") e.Branch = v;
+            switch (kind)
             {
-                case "ai-title": if ((m = rxTitle.Match(line)).Success) e.Title = Unescape(m.Groups[1].Value); break;
+                case "ai-title": if ((v = JsonlScan.Str(b, a, z, kTitle)) != null) e.Title = v; break;
                 case "user": e.Messages++; break;
                 case "assistant":
-                    if ((m = rxModel.Match(line)).Success) e.Model = m.Groups[1].Value;
+                    if ((v = JsonlScan.Str(b, a, z, kModel)) != null) e.Model = "claude-" + v;
                     // one reply is written as several lines that repeat the same usage: count it once
-                    var id = rxMsgId.Match(line);
-                    string mid = id.Success ? id.Groups[1].Value : null;
+                    string mid = JsonlScan.Str(b, a, z, kMsgId);
                     if (mid != null && mid == e.LastMsgId) break;
                     e.LastMsgId = mid;
                     e.Messages++;
-                    e.Tokens += Num(rxIn, line) + Num(rxOut, line) + Num(rxCacheNew, line);
+                    e.Tokens += JsonlScan.Num(b, a, z, kIn) + JsonlScan.Num(b, a, z, kOut) + JsonlScan.Num(b, a, z, kCacheNew);
                     break;
             }
-        }
-
-        static long Num(Regex rx, string line)
-        {
-            var m = rx.Match(line);
-            long v;
-            return m.Success && long.TryParse(m.Groups[1].Value, out v) ? v : 0;
-        }
-
-        static string Unescape(string s)
-        {
-            return s.IndexOf('\\') < 0 ? s : Regex.Unescape(s);
         }
 
         /// <summary>"claude-opus-5-5" → "Opus 5.5", "claude-sonnet-4-5-20250929" → "Sonnet 4.5".</summary>

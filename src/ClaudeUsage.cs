@@ -177,7 +177,7 @@ namespace Harbor
         {
             public string Source;
             public long Offset;
-            public string Partial = "", LastMsgId;
+            public string LastMsgId;
             public readonly Dictionary<DateTime, long> Hours = new Dictionary<DateTime, long>();  // local hour → tokens
             public readonly Dictionary<DateTime, int> Replies = new Dictionary<DateTime, int>();  // local day → replies
             public readonly Dictionary<string, long> Models = new Dictionary<string, long>();     // "yyyyMMdd|model" → tokens
@@ -185,13 +185,9 @@ namespace Harbor
 
         static readonly Dictionary<string, FileState> files = new Dictionary<string, FileState>(StringComparer.OrdinalIgnoreCase);
 
-        static readonly Regex rxAssistant = new Regex("\"type\":\"assistant\""),
-            rxTime = new Regex("\"timestamp\":\"([^\"]+)\""),
-            rxModel = new Regex("\"model\":\"(claude-[^\"]+)\""),
-            rxMsgId = new Regex("\"id\":\"(msg_[^\"]+)\""),
-            rxIn = new Regex("\"input_tokens\":(\\d+)"),
-            rxOut = new Regex("\"output_tokens\":(\\d+)"),
-            rxCacheNew = new Regex("\"cache_creation_input_tokens\":(\\d+)");
+        static readonly byte[] kAssistant = JsonlScan.Bytes("\"type\":\"assistant\""), kTime = JsonlScan.Bytes("\"timestamp\":\""),
+            kModel = JsonlScan.Bytes("\"model\":\"claude-"), kMsgId = JsonlScan.Bytes("\"id\":\"msg_"),
+            kIn = JsonlScan.Bytes("\"input_tokens\":"), kOut = JsonlScan.Bytes("\"output_tokens\":"), kCacheNew = JsonlScan.Bytes("\"cache_creation_input_tokens\":");
 
         static Stats ReadStats()
         {
@@ -252,54 +248,33 @@ namespace Harbor
 
         static void ReadNew(FileState s, FileInfo f)
         {
-            if (f.Length < s.Offset) { s.Offset = 0; s.Partial = ""; s.LastMsgId = null; s.Hours.Clear(); s.Replies.Clear(); s.Models.Clear(); } // rewritten
+            if (f.Length < s.Offset) { s.Offset = 0; s.LastMsgId = null; s.Hours.Clear(); s.Replies.Clear(); s.Models.Clear(); } // rewritten
             if (f.Length == s.Offset) return;
-            using (var fs = new FileStream(f.FullName, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
-            {
-                fs.Seek(s.Offset, SeekOrigin.Begin);
-                var buf = new byte[1 << 20];
-                int n;
-                while ((n = fs.Read(buf, 0, buf.Length)) > 0)
-                {
-                    string chunk = s.Partial + Encoding.UTF8.GetString(buf, 0, n);
-                    int start = 0, nl;
-                    while ((nl = chunk.IndexOf('\n', start)) >= 0) { Line(s, chunk.Substring(start, nl - start)); start = nl + 1; }
-                    s.Partial = chunk.Substring(start);
-                    s.Offset += n;
-                }
-            }
+            s.Offset = JsonlScan.Read(f.FullName, s.Offset, (b, a, e) => Line(s, b, a, e));
         }
 
-        static void Line(FileState s, string line)
+        static void Line(FileState s, byte[] b, int a, int e)
         {
-            if (!rxAssistant.IsMatch(line)) return;
+            if (!JsonlScan.Has(b, a, e, kAssistant)) return;
             // one reply is written as several lines repeating the same usage: count it once
-            var id = rxMsgId.Match(line);
-            string mid = id.Success ? id.Groups[1].Value : null;
+            string mid = JsonlScan.Str(b, a, e, kMsgId);
             if (mid != null && mid == s.LastMsgId) return;
             s.LastMsgId = mid;
-            var tm = rxTime.Match(line);
+            string ts = JsonlScan.Str(b, a, e, kTime);
             DateTimeOffset t;
-            if (!tm.Success || !DateTimeOffset.TryParse(tm.Groups[1].Value, CultureInfo.InvariantCulture, DateTimeStyles.None, out t)) return;
+            if (ts == null || !DateTimeOffset.TryParse(ts, CultureInfo.InvariantCulture, DateTimeStyles.None, out t)) return;
             DateTime local = t.LocalDateTime;
             if (local < DateTime.Today.AddDays(-7)) return;
-            long tokens = Num(rxIn, line) + Num(rxOut, line) + Num(rxCacheNew, line);
+            long tokens = JsonlScan.Num(b, a, e, kIn) + JsonlScan.Num(b, a, e, kOut) + JsonlScan.Num(b, a, e, kCacheNew);
             var hour = new DateTime(local.Year, local.Month, local.Day, local.Hour, 0, 0);
             long v; s.Hours.TryGetValue(hour, out v); s.Hours[hour] = v + tokens;
             int r; s.Replies.TryGetValue(local.Date, out r); s.Replies[local.Date] = r + 1;
-            var mm = rxModel.Match(line);
-            if (mm.Success)
+            string model = JsonlScan.Str(b, a, e, kModel);
+            if (model != null)
             {
-                string key = local.ToString("yyyyMMdd", CultureInfo.InvariantCulture) + "|" + mm.Groups[1].Value;
+                string key = local.ToString("yyyyMMdd", CultureInfo.InvariantCulture) + "|claude-" + model;
                 long m; s.Models.TryGetValue(key, out m); s.Models[key] = m + tokens;
             }
-        }
-
-        static long Num(Regex rx, string line)
-        {
-            var m = rx.Match(line);
-            long v;
-            return m.Success && long.TryParse(m.Groups[1].Value, out v) ? v : 0;
         }
 
         // ------------------------------------------------------------------ --snapshot --demo

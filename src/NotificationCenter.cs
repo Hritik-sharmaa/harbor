@@ -50,6 +50,7 @@ namespace Harbor
 
         protected override void OnOpened()
         {
+            expanded = false;
             var t = DateTime.Today;
             month = new DateTime(t.Year, t.Month, 1);
             Load();
@@ -76,6 +77,10 @@ namespace Harbor
                     new Note { Id = 1, App = "Messages", Title = "Alex", Body = "Are we still on for dinner tonight? I booked a table for 8.", Time = now.AddMinutes(-2) },
                     new Note { Id = 2, App = "Calendar", Title = "Design review", Body = "Starts in 15 minutes · Conference room B", Time = now.AddMinutes(-9) },
                     new Note { Id = 3, App = "Mail", Title = "Your order has shipped", Body = "Track your package — arriving Thursday.", Time = now.AddHours(-1) },
+                    new Note { Id = 4, App = "Slack", Title = "#design", Body = "Priya: new mocks are up", Time = now.AddHours(-2) },
+                    new Note { Id = 5, App = "Photos", Title = "Your memories", Body = "A year ago today", Time = now.AddHours(-3) },
+                    new Note { Id = 6, App = "Messages", Title = "Mum", Body = "Call me when you're free", Time = now.AddHours(-4) },
+                    new Note { Id = 7, App = "Calendar", Title = "Gym", Body = "Tomorrow at 7:00", Time = now.AddHours(-5) },
                 };
                 loading = false;
                 return;
@@ -112,6 +117,11 @@ namespace Harbor
                                 LoadLogo(n, note.App);
                             }
                         res.Sort((a, b2) => b2.Time.CompareTo(a.Time));
+                        // forget dismissals of notifications Windows no longer has, then hide the ones you cleared
+                        var present = new HashSet<uint>();
+                        foreach (var x in res) present.Add(x.Id);
+                        if (dismissed.RemoveWhere(id => !present.Contains(id)) > 0) SaveHidden();
+                        res.RemoveAll(Hidden);
                         notes = res;
                         Refresh2();
                     });
@@ -130,17 +140,73 @@ namespace Harbor
             var arr = ShellIcons.LoadIcons(@"shell:AppsFolder\" + aumid, (int)Math.Round(22 * S));
             if (arr != null) logos[app] = arr[0];
         }
+        // ---- what you've cleared. Windows lets Harbor read notifications but usually not delete them (that needs a
+        // packaged app), so they'd come back the next time the list loads: Harbor remembers and keeps them hidden.
+
+        static DateTimeOffset clearedAt = DateTimeOffset.MinValue; // Clear All: everything up to this moment
+        static readonly HashSet<uint> dismissed = new HashSet<uint>(); // closed one by one
+        static bool hiddenLoaded;
+        static string HiddenFile { get { return System.IO.Path.Combine(Settings.Dir, "notifications-hidden.txt"); } }
+
+        static bool Hidden(Note n)
+        {
+            if (!hiddenLoaded) LoadHidden();
+            return n.Time <= clearedAt || dismissed.Contains(n.Id);
+        }
+
+        static void LoadHidden()
+        {
+            hiddenLoaded = true;
+            try
+            {
+                if (!System.IO.File.Exists(HiddenFile)) return;
+                var lines = System.IO.File.ReadAllLines(HiddenFile);
+                long ticks;
+                if (lines.Length > 0 && long.TryParse(lines[0], out ticks)) clearedAt = new DateTimeOffset(ticks, TimeSpan.Zero);
+                for (int i = 1; i < lines.Length; i++) { uint id; if (uint.TryParse(lines[i], out id)) dismissed.Add(id); }
+            }
+            catch (Exception ex) { App.Log(ex); }
+        }
+
+        static void SaveHidden()
+        {
+            try
+            {
+                System.IO.Directory.CreateDirectory(Settings.Dir);
+                var lines = new List<string> { clearedAt.UtcTicks.ToString(CultureInfo.InvariantCulture) };
+                foreach (var id in dismissed) lines.Add(id.ToString(CultureInfo.InvariantCulture));
+                System.IO.File.WriteAllLines(HiddenFile, lines.ToArray());
+            }
+            catch (Exception ex) { App.Log(ex); }
+        }
+
         void Dismiss(Note n)
         {
             try { UserNotificationListener.Current.RemoveNotification(n.Id); } catch { }
+            if (!hiddenLoaded) LoadHidden();
+            if (!Demo) { dismissed.Add(n.Id); SaveHidden(); }
             notes.Remove(n);
         }
 
         void ClearAll()
         {
             try { UserNotificationListener.Current.ClearNotifications(); } catch { }
+            if (!hiddenLoaded) LoadHidden();
+            if (!Demo)
+            {
+                var latest = DateTimeOffset.Now;
+                foreach (var n in notes) if (n.Time > latest) latest = n.Time;
+                clearedAt = latest;
+                dismissed.Clear();
+                SaveHidden();
+            }
             notes.Clear();
+            expanded = false;
         }
+
+        // only the newest few show until you ask for the rest
+        const int Collapsed = 5;
+        bool expanded;
 
         static string Ago(DateTimeOffset t)
         {
@@ -183,11 +249,22 @@ namespace Harbor
             else if (notes.Count == 0) InfoCard(ui, pad, w, "You're all caught up");
             else
             {
-                int shown = 0;
+                int limit = expanded ? 50 : Collapsed, shown = 0;
                 foreach (var n in notes)
                 {
-                    if (++shown > 20) break;
+                    if (++shown > limit) break;
                     NoteCard(ui, pad, w, n);
+                }
+                if (notes.Count > Collapsed)
+                {
+                    // "Show 7 more" / "Show less"
+                    int more = Math.Min(notes.Count, 50) - Collapsed;
+                    var mr = new RectangleF(pad, ui.Y, w, 30 * S);
+                    ui.Fill(mr, Hover == "nmore" ? Theme.TileHover : Theme.Tile, 15 * S);
+                    using (var ab = new SolidBrush(Theme.Accent))
+                        ui.Text(expanded ? "Show less" : "Show " + more + " more", mr, ui.Small, ab, 1);
+                    ui.AddHit("nmore", mr, () => { expanded = !expanded; }, true);
+                    ui.Y += mr.Height + 8 * S;
                 }
             }
 
