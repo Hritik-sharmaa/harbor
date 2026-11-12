@@ -869,9 +869,9 @@ namespace Harbor
 
             // bottom row: leave it to the editor (e.g. to type your own answer), or send the ticked ones
             float by = card.Bottom - 12 * S - bottomRow;
-            var editor = new RectangleF(ix, by, 150 * S, bottomRow);
+            var editor = new RectangleF(ix, by, 190 * S, bottomRow);
             ui.Fill(editor, Color.FromArgb(Hover == "qEditor" ? 46 : 26, 255, 255, 255), bottomRow / 2);
-            ui.Text("Answer in editor", editor, f.Small, Hover == "qEditor" ? f.White : f.Dim, 1);
+            ui.Text("Dismiss  ·  answer in editor", editor, f.Small, Hover == "qEditor" ? f.White : f.Dim, 1);
             ui.AddHit("qEditor", editor, () => ClaudeBridge.Answer(r, null), true);
             if (q.Multi)
             {
@@ -924,13 +924,18 @@ namespace Harbor
                 ui.Text("waiting " + Span(now - r.At) + (ClaudeBridge.Pending.Count > 1 ? "  ·  +" + (ClaudeBridge.Pending.Count - 1) + " more" : ""), new RectangleF(ix, card.Y + 8 * S, iw, 20 * S), f.Small, f.Faint, 2);
                 using (var mono = new Font("Consolas", 12f * S, GraphicsUnit.Pixel))
                 using (var sf = new StringFormat { Trimming = StringTrimming.EllipsisCharacter })
-                    ui.G.DrawString((r.Detail != null ? r.Detail + "\n" : "") + (r.Summary ?? ""), mono, f.Dim, new RectangleF(ix, card.Y + 30 * S, iw - 290 * S, 52 * S), sf);
+                    ui.G.DrawString((r.Detail != null ? r.Detail + "\n" : "") + (r.Summary ?? ""), mono, f.Dim, new RectangleF(ix, card.Y + 30 * S, iw - 376 * S, 52 * S), sf);
                 using (var dark = new SolidBrush(Color.FromArgb(235, 18, 18, 22)))
                 {
                     float bh = 30 * S, by = card.Bottom - bh - 10 * S;
                     var allow = new RectangleF(card.Right - 14 * S - 80 * S, by, 80 * S, bh);
                     var always = new RectangleF(allow.X - 8 * S - 108 * S, by, 108 * S, bh);
                     var deny = new RectangleF(always.X - 8 * S - 70 * S, by, 70 * S, bh);
+                    // Dismiss: off the notch without answering; Claude Code asks in the editor as it normally would
+                    var dismiss = new RectangleF(deny.X - 8 * S - 78 * S, by, 78 * S, bh);
+                    ui.Fill(dismiss, Color.FromArgb((int)(18 + 30 * Hot("cDismiss")), 255, 255, 255), bh / 2);
+                    ui.Text("Dismiss", dismiss, f.Bold, Hover == "cDismiss" ? f.White : f.Dim, 1);
+                    ui.AddHit("cDismiss", dismiss, () => ClaudeBridge.Answer(r, null), true);
                     ui.Fill(allow, Color.FromArgb(Hover == "cAllow" ? 255 : 238, 255, 255, 255), bh / 2);
                     ui.Text("Allow", allow, f.Bold, dark, 1);
                     ui.Fill(always, Color.FromArgb(Hover == "cAlways" ? 70 : 40, 255, 255, 255), bh / 2);

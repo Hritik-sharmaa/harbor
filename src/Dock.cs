@@ -1134,10 +1134,15 @@ namespace Harbor
             }
             var wins = it.Wins;
             IntPtr fg = Tracker.Foreground;
-            int active = wins.FindIndex(w => w.Hwnd == fg);
+            // a window you just minimized can still be "foreground" when nothing else took over (only the desktop
+            // was behind it), and some apps hide off-screen instead of minimizing: neither is really in front, so the
+            // click must bring it back, not minimize it again
+            int active = N.IsIconic(fg) || !N.IsWindowVisible(fg) || Tracker.OffScreen(fg) ? -1 : wins.FindIndex(w => w.Hwnd == fg);
             if (active < 0)
             {
-                Tracker.Activate(wins[0].Hwnd);
+                // the app's minimized window comes back first if all of them are minimized; otherwise its newest visible one
+                var pick = wins.Find(w => !N.IsIconic(w.Hwnd) && !Tracker.OffScreen(w.Hwnd)) ?? wins[0];
+                Tracker.Activate(pick.Hwnd);
             }
             else if (wins.Count == 1)
             {

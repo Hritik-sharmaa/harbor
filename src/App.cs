@@ -34,6 +34,7 @@ namespace Harbor
         public static readonly int OpenSettings = N.RegisterWindowMessage("Harbor_OpenSettings");
         public static readonly int PillDemo = N.RegisterWindowMessage("Harbor_PillDemo");
         public static readonly int MemReport = N.RegisterWindowMessage("Harbor_MemReport");
+        public static readonly int ActivateWindow = N.RegisterWindowMessage("Harbor_Activate"); // a developer check: what a dock click does
 
         public Host() { CreateHandle(new CreateParams { Caption = "HarborHost" }); }
 
@@ -44,6 +45,7 @@ namespace Harbor
             if (m.Msg == OpenControlCenter) { ControlCenter.ToggleOnPrimary(); return; }
             if (m.Msg == OpenSettings) { SettingsWindow.ShowWindow(); return; }
             if (m.Msg == PillDemo) { LiveActivity.Demo(); return; }
+            if (m.Msg == ActivateWindow) { Tracker.Activate(m.WParam); return; }
             if (m.Msg == MemReport) { App.WriteMemReport(m.WParam.ToInt32() != 0); return; }
             if (m.Msg == 0x312 /*WM_HOTKEY*/) { App.OnHotkey(m.WParam.ToInt32()); return; }
             if (m.Msg == taskbarCreated)
@@ -1034,6 +1036,14 @@ namespace Harbor
                     Installer.Remove();
                     Banners.RestoreWindows();
                     Installer.DeleteFilesAfterExit();
+                    return;
+                }
+                int act = Array.IndexOf(args, "--activate"); // a developer check: --activate <window handle> does what a dock click does
+                long actHwnd;
+                if (act >= 0 && act + 1 < args.Length && long.TryParse(args[act + 1], out actHwnd))
+                {
+                    IntPtr host = N.FindWindow(null, "HarborHost");
+                    if (host != IntPtr.Zero) N.PostMessage(host, Host.ActivateWindow, new IntPtr(actHwnd), IntPtr.Zero);
                     return;
                 }
                 if (Array.IndexOf(args, "--quit") >= 0 || Array.IndexOf(args, "--cc") >= 0 || Array.IndexOf(args, "--pill-demo") >= 0 || Array.IndexOf(args, "--mem-report") >= 0)

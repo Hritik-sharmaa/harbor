@@ -391,6 +391,7 @@ namespace Harbor
         public static void Activate(IntPtr h)
         {
             if (N.IsIconic(h)) N.ShowWindowAsync(h, N.SW_RESTORE);
+            else if (OffScreen(h)) Rescue(h);
             if (!N.SetForegroundWindow(h))
             {
                 // Foreground lock workaround: a synthetic Alt press lets us take foreground
@@ -399,6 +400,47 @@ namespace Harbor
                 N.keybd_event(N.VK_MENU, 0, N.KEYEVENTF_KEYUP, UIntPtr.Zero);
             }
             N.BringWindowToTop(h);
+        }
+
+        [StructLayout(LayoutKind.Sequential)]
+        struct WINDOWPLACEMENT { public int Length, Flags, ShowCmd; public POINT Min, Max; public RECT Normal; }
+        [DllImport("user32.dll")] static extern bool GetWindowPlacement(IntPtr h, ref WINDOWPLACEMENT p);
+        [DllImport("user32.dll")] static extern bool SetWindowPlacement(IntPtr h, ref WINDOWPLACEMENT p);
+        [DllImport("user32.dll")] static extern IntPtr MonitorFromRect(ref RECT r, uint flags);
+
+        /// <summary>
+        /// Shown, not minimized, yet on no screen: parked at -32000 (where Windows keeps minimized windows) or left on a
+        /// monitor that's gone. Some apps (WhatsApp and other WinUI apps) save that spot as their normal position, so
+        /// bringing them to the front, or even relaunching them, leaves them invisible.
+        /// </summary>
+        public static bool OffScreen(IntPtr h)
+        {
+            RECT r;
+            if (!N.IsWindowVisible(h) || N.IsIconic(h) || !N.GetWindowRect(h, out r)) return false;
+            if (r.Left <= -30000 && r.Top <= -30000) return true;
+            return MonitorFromRect(ref r, 0 /*MONITOR_DEFAULTTONULL*/) == IntPtr.Zero;
+        }
+
+        /// <summary>Puts an off-screen window back on the screen you're using, at its own size if that's sensible.</summary>
+        static void Rescue(IntPtr h)
+        {
+            var p = new WINDOWPLACEMENT { Length = Marshal.SizeOf(typeof(WINDOWPLACEMENT)) };
+            if (!GetWindowPlacement(h, ref p)) return;
+            var wa = Screen.FromPoint(Cursor.Position).WorkingArea;
+            int w = p.Normal.Right - p.Normal.Left, ht = p.Normal.Bottom - p.Normal.Top;
+            bool normalOk = p.Normal.Left > -30000 && MonitorFromRect(ref p.Normal, 0) != IntPtr.Zero;
+            if (!normalOk)
+            {
+                // its saved size is often the tiny default (500 x 400): open it at a comfortable size instead
+                if (w < 800 || ht < 560 || w > wa.Width || ht > wa.Height) { w = Math.Min(1200, wa.Width * 7 / 10); ht = Math.Min(820, wa.Height * 78 / 100); }
+                p.Normal.Left = wa.X + (wa.Width - w) / 2; p.Normal.Top = wa.Y + (wa.Height - ht) / 2;
+                p.Normal.Right = p.Normal.Left + w; p.Normal.Bottom = p.Normal.Top + ht;
+            }
+            p.ShowCmd = 1; // SW_SHOWNORMAL
+            p.Flags = 0;
+            SetWindowPlacement(h, ref p);
+            // a window already in its "normal" state ignores the placement's position: move it there too
+            N.SetWindowPos(h, IntPtr.Zero, p.Normal.Left, p.Normal.Top, p.Normal.Right - p.Normal.Left, p.Normal.Bottom - p.Normal.Top, N.SWP_NOZORDER | N.SWP_NOACTIVATE);
         }
 
         public static void Minimize(IntPtr h) { N.ShowWindowAsync(h, N.SW_MINIMIZE); }

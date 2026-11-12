@@ -1,5 +1,16 @@
 # Changelog
 
+## 0.4.2 — 2026-11-12 (preview)
+
+**Fixed**
+- **Minimized apps came back from the dock.** When you minimized an app's only window and nothing else took its place, Windows still reported it as the window in front, so clicking its dock icon "minimized" it again and nothing happened. A minimized or hidden window no longer counts as the one in front.
+- **Apps stuck off-screen (WhatsApp) open again.** Some apps, WhatsApp and others built on WinUI, save the spot Windows parks minimized windows at (-32000, -32000) as their normal position, so they came to the front off-screen and seemed stuck, even when opened from Start. Clicking them in the dock now puts the window back on the screen you're using, at its own size or a comfortable one.
+
+**New**
+- **Dismiss Claude's prompts in the notch:** a Dismiss button on permission requests, and "Dismiss · answer in editor" on questions. The prompt leaves the notch unanswered and Claude Code asks in your editor as usual.
+- `Harbor.exe --activate <window handle>` runs what a dock click does (a developer check).
+
+
 ## 0.4.1 — 2026-11-08 (preview)
 
 **Less memory**
