@@ -1,0 +1,1 @@
+{"uuid": "unsafe-mode@harbor.test", "name": "Harbor test helper", "description": "Test only (shell-smoke.sh): lets the test script inspect GNOME Shell over D-Bus. Never install this for real use.", "shell-version": ["45", "46", "47", "48", "49"]}

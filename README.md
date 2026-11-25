@@ -6,7 +6,8 @@
 
 <p align="center">
   A macOS-style dock, menu bar and Control Center for Windows 10 and 11.<br>
-  Native, about 20–40 MB of RAM, close to 0% CPU when idle, and starts with Windows.
+  Native, about 20–40 MB of RAM, close to 0% CPU when idle, and starts with Windows.<br>
+  <b>New:</b> the dock and live activities on Linux (GNOME on Fedora and Ubuntu). <a href="linux/README.md">Harbor for Linux →</a>
 </p>
 
 <p align="center">
@@ -170,6 +171,10 @@ To try it without installing, run `Harbor.exe` straight from the extracted folde
 - Windows 10 (1903 or later) or Windows 11
 - .NET Framework 4.8, which ships with Windows
 
+### Linux (preview)
+
+On **Fedora 39+ and Ubuntu 24.04+** (GNOME Shell 45 or newer), Harbor brings its dock and live activities as a GNOME Shell extension, with **harbord**, a small helper that runs Harbor's reminders, timers, Pomodoro, Focus, weather, lyrics, calendar and Claude usage. Download `harbor-X.Y.Z-1.x86_64.rpm` (Fedora) or `harbor_X.Y.Z-1_amd64.deb` (Ubuntu) from [Releases](https://github.com/hritik-sharmaa/harbor/releases), install it, log out and back in, and run `gnome-extensions enable harbor@hritik-sharmaa.github.io`. See [linux/README.md](linux/README.md) for building from source and what's still to come.
+
 ## Uninstall
 
 Use any of these:
@@ -219,6 +224,8 @@ bin\Harbor.exe --install
 | `src/ClaudeBridge.cs` | Claude Code hook, local pipe and settings edit |
 | `src/Banners.cs`, `src/ShellDrag.cs` | Notification banners, dragging files out of stacks |
 | `src/WinPlatform.cs` | Windows' side of `IPlatform`: what the shared code asks of the OS |
+
+`linux/` holds the Linux side: `harbord` (the helper, .NET 8) and the GNOME Shell extension. See [linux/README.md](linux/README.md).
 
 #### Shared code (`src/Core`)
 

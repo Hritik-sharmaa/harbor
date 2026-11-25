@@ -41,3 +41,62 @@ jobs:
           files: ${{ env.ZIP }}
           body_path: CHANGELOG.md
           prerelease: ${{ startsWith(github.ref_name, 'v0.') }}
+
+  linux:
+    # Harbor for Linux: harbord (NativeAOT) + the GNOME Shell extension, packaged as .deb and .rpm
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '8.0.x'
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version: 'stable'
+
+      - name: Tools (NativeAOT needs clang and zlib; GNOME Shell for the smoke test; nfpm for packages)
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends clang zlib1g-dev zip gnome-shell gjs gir1.2-gtk-4.0 libgl1-mesa-dri gnome-settings-daemon adwaita-icon-theme dbus-daemon
+          go install github.com/goreleaser/nfpm/v2/cmd/nfpm@v2.49.0
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: Build harbord and the extension
+        run: make -C linux all
+
+      - name: harbord self-test
+        run: linux/build/harbord/harbord --selftest
+
+      - name: GNOME Shell smoke test (headless)
+        run: linux/tests/shell-smoke.sh linux/build/harbord/harbord
+
+      - name: Packages
+        run: |
+          make -C linux packages
+          ls -la linux/build/*.deb linux/build/*.rpm linux/build/*.zip
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Harbor-linux
+          path: |
+            linux/build/*.deb
+            linux/build/*.rpm
+            linux/build/*.shell-extension.zip
+
+  linux-release:
+    # on a tag, add the Linux packages to the release the Windows job publishes
+    if: github.ref_type == 'tag'
+    needs: [build, linux]
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: Harbor-linux
+          path: dist
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*
+          prerelease: ${{ startsWith(github.ref_name, 'v0.') }}

@@ -1,5 +1,17 @@
 # Changelog
 
+## Unreleased
+
+**Harbor on Linux (preview)**
+- **A dock for GNOME** on Fedora 39+ and Ubuntu 24.04+ (GNOME Shell 45–49), as a GNOME Shell extension: pinned and running apps with running dots, magnification that follows the pointer, launch and attention bounce, hover labels, a right-click menu (windows, New Window, Keep in Dock, Quit), and Smart Hide. Maximized windows stop above the dock.
+- **Live activities** for timers, alarms, meetings and break reminders, with their Again / Join buttons.
+- **harbord**, a small helper that runs the same code as Harbor on Windows for reminders, timers and alarms, world clocks, Pomodoro, Focus, weather, lyrics, calendar, notes, the shelf and Claude usage. D-Bus starts it the first time the extension needs it. It's one native binary, so no .NET runtime is needed. Settings live in `~/.config/harbor/settings.ini`.
+- **Packages:** a `.deb` for Ubuntu and an `.rpm` for Fedora on each release, plus a spec for Fedora's COPR.
+
+**Under the hood**
+- Code that isn't tied to Windows now lives in `src/Core` and reaches the OS through one interface (`IPlatform`). Harbor.exe still builds with `build.cmd` and the compiler that ships with Windows.
+
+
 ## 0.4.2 — 2026-11-12 (preview)
 
 **Fixed**

@@ -55,8 +55,11 @@ export class Dock {
             this._scheduleHide();
             return Clutter.EVENT_PROPAGATE;
         });
-        this.actor.connect('enter-event', () => {
+        this.actor.connect('enter-event', (_a, ev) => {
             this._cancelHide();
+            // magnify straight away: a quick flick into the dock may bring no motion event at all
+            [this._pointerX] = ev.get_coords();
+            this._magnify();
             return Clutter.EVENT_PROPAGATE;
         });
         this.actor.connect('notify::width', () => this._place());

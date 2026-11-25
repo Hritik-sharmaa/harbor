@@ -1,0 +1,52 @@
+# Paths are relative to linux/ (where `make packages` runs nfpm). One description, two packages: `make packages` builds harbor_<version>_<arch>.deb (Ubuntu, Debian) and
+# harbor-<version>.<arch>.rpm (Fedora) from the files `make install DESTDIR=build/stage` put in place.
+# harbord is a native (NativeAOT) binary, so neither package needs the .NET runtime.
+name: harbor
+arch: ${ARCH}
+platform: linux
+version: ${VERSION}
+version_schema: semver
+release: 1
+section: gnome
+priority: optional
+maintainer: hritik-sharmaa <hritik-sharmaa@users.noreply.github.com>
+vendor: Harbor
+homepage: https://github.com/hritik-sharmaa/harbor
+license: MIT
+description: |
+  A macOS-style dock and live activities for GNOME Shell.
+  Harbor adds a dock with magnification, running dots and Smart Hide, and
+  live activities for timers, alarms, reminders and meetings. Its helper,
+  harbord, runs reminders, timers, Pomodoro, Focus, weather, lyrics,
+  calendar and Claude usage, and starts on its own through D-Bus.
+
+# GNOME Shell 45 or newer (the extension format it uses); it also brings ICU, which harbord uses for
+# time zones and dates. Package names are the same on Fedora and Ubuntu.
+depends:
+  - gnome-shell (>= 45)
+recommends:
+  - xdg-utils
+overrides:
+  rpm:
+    depends:
+      - gnome-shell >= 45
+      - libicu
+
+contents:
+  - src: build/stage/usr/bin/harbord
+    dst: /usr/bin/harbord
+    file_info: {mode: 0755}
+  - src: build/stage/usr/share/dbus-1/services/io.github.hritik_sharmaa.Harbor.service
+    dst: /usr/share/dbus-1/services/io.github.hritik_sharmaa.Harbor.service
+  - src: build/stage/usr/share/gnome-shell/extensions/harbor@hritik-sharmaa.github.io/
+    dst: /usr/share/gnome-shell/extensions/harbor@hritik-sharmaa.github.io/
+    type: tree
+  - src: build/stage/usr/share/icons/hicolor/256x256/apps/harbor.png
+    dst: /usr/share/icons/hicolor/256x256/apps/harbor.png
+  - src: ../LICENSE
+    dst: /usr/share/doc/harbor/LICENSE
+  - src: README.md
+    dst: /usr/share/doc/harbor/README.md
+
+scripts:
+  postinstall: packaging/postinstall.sh

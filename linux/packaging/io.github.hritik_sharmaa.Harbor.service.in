@@ -1,0 +1,4 @@
+# D-Bus starts harbord the first time Harbor's GNOME extension calls it; nothing else needs to start it.
+[D-BUS Service]
+Name=io.github.hritik_sharmaa.Harbor
+Exec=@BINDIR@/harbord
