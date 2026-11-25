@@ -45,6 +45,9 @@ namespace Harbor
 
         static readonly Dictionary<string, string> vals = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
 
+        /// <summary>Every appearance key there is (with or without a saved value).</summary>
+        public static IEnumerable<string> Keys { get { return defaults.Keys; } }
+
         /// <summary>Back to the shipped look for this run only (README screenshots); nothing is saved.</summary>
         public static void UseDefaults() { vals.Clear(); }
 

@@ -1,0 +1,39 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    harbord: Harbor's Linux helper. It runs the shared code in ../../src/Core (reminders, timers, Pomodoro, Focus,
+    weather, lyrics, calendar, Claude usage, settings) and offers it on the D-Bus session bus to the GNOME Shell
+    extension in ../gnome-extension. Build: `dotnet publish -c Release` (see ../Makefile).
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net8.0</TargetFramework>
+    <AssemblyName>harbord</AssemblyName>
+    <RootNamespace>Harbor</RootNamespace>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>disable</Nullable>
+    <LangVersion>latest</LangVersion>
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <!-- HttpWebRequest (src/Core/Web.cs) is obsolete on .NET 8 but works; Core keeps it so build.cmd needs no SDK -->
+    <NoWarn>$(NoWarn);SYSLIB0014;CS0649;CS0169;CS0414</NoWarn>
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+    <TieredPGO>true</TieredPGO>
+    <Version>0.4.2</Version>
+  </PropertyGroup>
+
+  <!-- `dotnet publish -p:Aot=true`: one native binary, no .NET runtime needed on the machine (needs clang) -->
+  <PropertyGroup Condition="'$(Aot)' == 'true'">
+    <PublishAot>true</PublishAot>
+    <InvariantGlobalization>false</InvariantGlobalization>
+    <StripSymbols>true</StripSymbols>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Compile Include="../../src/Core/*.cs" Link="Core/%(Filename)%(Extension)" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Tmds.DBus.Protocol" Version="0.95.2" />
+  </ItemGroup>
+</Project>
