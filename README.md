@@ -211,14 +211,27 @@ bin\Harbor.exe --install
 | `src/TopBar.cs`, `src/TrayService.cs` | Menu bar, app menus, status icons and system tray |
 | `src/ControlCenter.cs`, `src/Flyouts.cs`, `src/NotificationCenter.cs` | Panels |
 | `src/Flyout.cs` | Small immediate-mode UI toolkit used by every panel and by the Harbor app |
-| `src/SettingsWindow.cs`, `src/Look.cs`, `src/Settings.cs` | The Harbor app and `settings.ini` |
+| `src/SettingsWindow.cs` | The Harbor app |
 | `src/ShellIcons.cs` | Icon loading and the WhiteSur-style icon renderer |
 | `src/SystemStatus.cs`, `src/SysInfo.cs`, `src/BtBattery.cs`, `src/WinRT.cs` | Wi‑Fi, audio, brightness, stats, Bluetooth, media and notifications |
 | `src/Island.cs`, `src/IslandStyle.cs`, `src/IslandMore.cs`, `src/IslandTabs.cs`, `src/IslandDashboard.cs`, `src/NowPlaying.cs` | The island: its shape and springs, its pages, and the Now Playing view shared with the media panel |
-| `src/ClipboardHistory.cs`, `src/Shelf.cs`, `src/ClaudeUsage.cs` | Clipboard history, the file shelf, Claude usage |
-| `src/Pomodoro.cs`, `src/Weather.cs`, `src/ScreenTime.cs`, `src/Reminders.cs` | Pomodoro timer, Open-Meteo weather and icons, Screen Time tracking, reminders |
-| `src/ClaudeBridge.cs`, `src/ClaudeHistory.cs` | Claude Code hook, local pipe and settings edit; reading session history |
-| `src/Lyrics.cs`, `src/Banners.cs`, `src/ShellDrag.cs` | LRCLIB lyrics, notification banners, dragging files out of stacks |
+| `src/ClipboardHistory.cs`, `src/ScreenTime.cs`, `src/WeatherIcons.cs` | Clipboard history, Screen Time tracking, weather icons |
+| `src/ClaudeBridge.cs` | Claude Code hook, local pipe and settings edit |
+| `src/Banners.cs`, `src/ShellDrag.cs` | Notification banners, dragging files out of stacks |
+| `src/WinPlatform.cs` | Windows' side of `IPlatform`: what the shared code asks of the OS |
+
+#### Shared code (`src/Core`)
+
+`src/Core` holds the code that isn't tied to Windows. It is compiled into `Harbor.exe` on Windows and into `harbord` on Linux. Files there stay C# 5 (so `build.cmd` keeps working with the in-box compiler), use no WinForms, GDI+, P/Invoke or registry, and reach the OS only through `IPlatform` (`src/Core/Platform.cs`).
+
+| File | Responsibility |
+| --- | --- |
+| `Platform.cs` | `IPlatform`, the `Core` facade, `ITicker`, `Activity`, `Song`, `AppInfo` (version) |
+| `Settings.cs`, `Look.cs` | `settings.ini` and every appearance value, plus the theme colours |
+| `Json.cs`, `Web.cs`, `JsonlScan.cs` | JSON reader/writer, HTTPS GET, fast transcript scanning |
+| `Reminders.cs`, `Timers.cs`, `Pomodoro.cs`, `FocusMode.cs`, `Breaks.cs`, `Notes.cs`, `Shelf.cs` | Reminders, timers and alarms, Pomodoro, Focus, break reminders, notes, the file shelf |
+| `Weather.cs`, `Lyrics.cs`, `CalendarFeed.cs` | Open-Meteo weather, LRCLIB lyrics, iCal meetings |
+| `ClaudeUsage.cs`, `ClaudeHistory.cs`, `ClaudeDirs.cs` | Claude plan limits and token counts, session history, Claude Code's folders |
 
 ## Privacy
 

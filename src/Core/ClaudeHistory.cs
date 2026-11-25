@@ -83,8 +83,8 @@ namespace Harbor
                         result.Add(e);
                     }
                 }
-                catch (Exception ex) { App.Log(ex); }
-                App.Post(() =>
+                catch (Exception ex) { Core.Log(ex); }
+                Core.Post(() =>
                 {
                     latest = result;
                     scanning = false;

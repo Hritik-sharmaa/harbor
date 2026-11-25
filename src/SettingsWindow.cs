@@ -235,8 +235,8 @@ namespace Harbor
             cardTop = -1;
         }
 
-        public const string Version = "0.4.2";
-        public const string RepoUrl = "https://github.com/hritik-sharmaa/harbor";
+        public const string Version = AppInfo.Version;
+        public const string RepoUrl = AppInfo.RepoUrl;
         static readonly string[] pageInfo =
         {
             "Startup, displays, shortcuts and backup",

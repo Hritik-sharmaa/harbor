@@ -58,7 +58,7 @@ namespace Harbor
                     items.Add(new Note { Pinned = p[0] == "1", At = long.TryParse(p[1], out ticks) ? new DateTime(ticks) : DateTime.Now, Text = p[2].Replace("\\n", "\n").Replace("\\t", "\t") });
                 }
             }
-            catch (Exception ex) { App.Log(ex); }
+            catch (Exception ex) { Core.Log(ex); }
         }
 
         static void Save()
@@ -71,7 +71,7 @@ namespace Harbor
                     Directory.CreateDirectory(Settings.Dir);
                     File.WriteAllText(FilePath, sb.ToString(), Encoding.UTF8);
                 }
-                catch (Exception ex) { App.Log(ex); }
+                catch (Exception ex) { Core.Log(ex); }
             if (Changed != null) Changed();
         }
 

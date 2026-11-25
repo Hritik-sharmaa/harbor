@@ -63,14 +63,14 @@ namespace Harbor
                     foreach (var l in File.ReadAllLines(FilePath))
                         if (l.Trim() != "" && Exists(l.Trim())) items.Add(l.Trim());
             }
-            catch (Exception ex) { App.Log(ex); }
+            catch (Exception ex) { Core.Log(ex); }
         }
 
         static void Save()
         {
             if (!demo)
                 try { Directory.CreateDirectory(Settings.Dir); File.WriteAllLines(FilePath, items.ToArray()); }
-                catch (Exception ex) { App.Log(ex); }
+                catch (Exception ex) { Core.Log(ex); }
             if (Changed != null) Changed();
         }
 

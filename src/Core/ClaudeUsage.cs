@@ -5,7 +5,6 @@ using System.Globalization;
 using System.IO;
 using System.Text;
 using System.Text.RegularExpressions;
-using System.Web.Script.Serialization;
 
 namespace Harbor
 {
@@ -47,22 +46,22 @@ namespace Harbor
         /// <summary>Called while the tab is drawn: refreshes in the background at most every 20 seconds.</summary>
         public static void Refresh()
         {
-            if (demo || busy || (App.SnapshotMode && !demo) || (DateTime.Now - lastRefresh).TotalSeconds < 20) return;
+            if (demo || busy || (Core.SnapshotMode && !demo) || (DateTime.Now - lastRefresh).TotalSeconds < 20) return;
             busy = true;
             lastRefresh = DateTime.Now;
             System.Threading.ThreadPool.QueueUserWorkItem(delegate
             {
                 List<Limit> lim = null; DateTime? at = null; string from = null; Stats st = null;
-                try { ReadLimits(out lim, out at, out from); } catch (Exception ex) { App.Log(ex); }
-                try { st = ReadStats(); } catch (Exception ex) { App.Log(ex); }
-                App.Post(() =>
+                try { ReadLimits(out lim, out at, out from); } catch (Exception ex) { Core.Log(ex); }
+                try { st = ReadStats(); } catch (Exception ex) { Core.Log(ex); }
+                Core.Post(() =>
                 {
                     busy = false;
                     Loaded = true;
                     if (lim != null) { Limits = lim; LimitsAt = at; LimitsFrom = from; }
                     if (st != null) Week = st;
                     if (Changed != null) Changed();
-                    App.ScheduleTrim(); // the first read goes through every transcript of the week
+                    Core.Platform.TrimMemory(); // the first read goes through every transcript of the week
                 });
             });
         }
@@ -91,7 +90,7 @@ namespace Harbor
             foreach (var dir in ClaudeBridge.ConfigDirs())
             {
                 // the default profile keeps it next to the folder (%USERPROFILE%\.claude.json), the others inside theirs
-                string f = string.Equals(Path.GetFileName(dir.TrimEnd('\\')), ".claude", StringComparison.OrdinalIgnoreCase)
+                string f = string.Equals(Path.GetFileName(dir.TrimEnd('\\', '/')), ".claude", StringComparison.OrdinalIgnoreCase)
                     ? Path.Combine(home, ".claude.json") : Path.Combine(dir, ".claude.json");
                 if (!File.Exists(f)) continue;
                 DateTime w = File.GetLastWriteTimeUtc(f), prev;
@@ -117,8 +116,7 @@ namespace Harbor
             using (var fs = new FileStream(file, FileMode.Open, FileAccess.Read, FileShare.ReadWrite | FileShare.Delete))
             using (var sr = new StreamReader(fs, Encoding.UTF8)) text = sr.ReadToEnd();
             if (text.IndexOf("cachedUsageUtilization", StringComparison.Ordinal) < 0) return null;
-            var js = new JavaScriptSerializer { MaxJsonLength = int.MaxValue, RecursionLimit = 200 };
-            var root = js.DeserializeObject(text) as Dictionary<string, object>;
+            var root = Json.Object(text);
             if (root == null) return null;
             var cu = Get(root, "cachedUsageUtilization") as Dictionary<string, object>;
             if (cu == null) return null;
@@ -205,7 +203,7 @@ namespace Harbor
                     live.Add(path);
                     FileState s;
                     if (!files.TryGetValue(path, out s)) files[path] = s = new FileState { Source = source };
-                    try { ReadNew(s, fi); } catch (Exception ex) { App.Log(ex); }
+                    try { ReadNew(s, fi); } catch (Exception ex) { Core.Log(ex); }
                 }
             }
             foreach (var k in new List<string>(files.Keys)) if (!live.Contains(k)) files.Remove(k);

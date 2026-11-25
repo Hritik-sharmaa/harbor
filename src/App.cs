@@ -977,6 +977,7 @@ namespace Harbor
         [STAThread]
         static void Main(string[] args)
         {
+            Core.Platform = new WinPlatform(); // the shared code (src/Core) reaches Windows through this
             // Claude Code runs us as a hook: forward the event and exit, before anything else starts
             if (Array.IndexOf(args, "--claude-hook") >= 0) { ClaudeBridge.RunHook(); return; }
             // developer check: add / remove Harbor's hooks in a copy of a settings file

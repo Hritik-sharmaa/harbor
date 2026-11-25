@@ -5,7 +5,6 @@ using System.IO;
 using System.Net;
 using System.Text;
 using System.Text.RegularExpressions;
-using System.Web.Script.Serialization;
 
 namespace Harbor
 {
@@ -40,13 +39,14 @@ namespace Harbor
         public static State For(out Result result)
         {
             result = null;
-            if (!Look.Bool("Lyrics") || !Media.Has) return State.Off;
-            if (Media.Demo) { result = Demo(); return State.Ready; }
-            string key = Key(Media.Artist, Media.Title);
+            var song = Core.Platform.NowPlaying();
+            if (!Look.Bool("Lyrics") || song == null || !song.Has) return State.Off;
+            if (song.Demo) { result = Demo(); return State.Ready; }
+            string key = Key(song.Artist, song.Title);
             if (cache.TryGetValue(key, out result)) return State.Ready;
             var saved = FromDisk(key);
             if (saved != null) { Store(key, saved); result = saved; return State.Ready; } // played before: no request
-            if (loadingKey != key) Fetch(key, Media.Artist, Media.Title, Media.Album, Media.Duration);
+            if (loadingKey != key) Fetch(key, song.Artist, song.Title, song.Album, song.Duration);
             return State.Loading;
         }
 
@@ -57,9 +57,9 @@ namespace Harbor
             {
                 Result r;
                 try { r = Lookup(artist, title, album, duration); }
-                catch (Exception ex) { App.Log(ex); r = new Result { Failed = true }; }
+                catch (Exception ex) { Core.Log(ex); r = new Result { Failed = true }; }
                 ToDisk(key, r);
-                App.Post(() =>
+                Core.Post(() =>
                 {
                     if (loadingKey == key) loadingKey = null;
                     Store(key, r);
@@ -74,7 +74,7 @@ namespace Harbor
             {
                 // keep the failure only briefly so reopening the panel later tries again
                 cache[key] = r;
-                var t = new System.Windows.Forms.Timer { Interval = 15000 };
+                var t = Core.NewTicker(15000);
                 t.Tick += delegate { t.Stop(); t.Dispose(); Result cur; if (cache.TryGetValue(key, out cur) && cur == r) cache.Remove(key); };
                 t.Start();
                 return;
@@ -137,7 +137,7 @@ namespace Harbor
             {
                 int status;
                 string json = Ask(Api + "get?track_name=" + Uri.EscapeDataString(t[0]) + "&artist_name=" + Uri.EscapeDataString(t[1]) + len, out status);
-                if (status == 200) { var r = FromJson(new JavaScriptSerializer().Deserialize<Dictionary<string, object>>(json)); if (r != null) return r; }
+                if (status == 200) { var r = FromJson(Json.Object(json)); if (r != null) return r; }
                 else if (status != 404) busy = true;
             }
 
@@ -211,7 +211,8 @@ namespace Harbor
 
         static void ToDisk(string key, Result r)
         {
-            if (r.Failed || Media.Demo) return;
+            var song = Core.Platform.NowPlaying();
+            if (r.Failed || (song != null && song.Demo)) return;
             try
             {
                 Directory.CreateDirectory(CacheDir);
@@ -228,14 +229,15 @@ namespace Harbor
                 else sb.Append("N\n");
                 File.WriteAllText(CacheFile(key), sb.ToString(), Encoding.UTF8);
             }
-            catch (Exception ex) { App.Log(ex); }
+            catch (Exception ex) { Core.Log(ex); }
         }
 
         /// <summary>"Try again" after a failed lookup.</summary>
         public static void Retry()
         {
-            if (!Media.Has) return;
-            string key = Key(Media.Artist, Media.Title);
+            var song = Core.Platform.NowPlaying();
+            if (song == null || !song.Has) return;
+            string key = Key(song.Artist, song.Title);
             Result r;
             if (cache.TryGetValue(key, out r) && (r.Failed || r.NotFound)) cache.Remove(key);
             if (r != null && r.NotFound) try { File.Delete(CacheFile(key)); } catch { }
@@ -245,7 +247,8 @@ namespace Harbor
         /// <summary>The closest-length result (synced lyrics preferred); null if none is the same recording.</summary>
         static Dictionary<string, object> Pick(string json, TimeSpan duration, string mustContainTitle, double tolerance)
         {
-            var list = new JavaScriptSerializer().Deserialize<List<Dictionary<string, object>>>(json);
+            var list = Json.Objects(json);
+            if (list == null) return null;
             Dictionary<string, object> best = null;
             double bestScore = double.MaxValue;
             foreach (var item in list)
@@ -307,37 +310,5 @@ namespace Harbor
             return lines;
         }
 
-    }
-
-    /// <summary>Plain HTTPS GET for Harbor's few web lookups (lyrics, weather). It blocks, so call it off the UI thread.</summary>
-    static class Web
-    {
-        public static string Get(string url, out int status)
-        {
-            // .NET Framework apps built without a target-framework attribute default to old TLS versions
-            ServicePointManager.SecurityProtocol |= SecurityProtocolType.Tls12 | (SecurityProtocolType)12288; // TLS 1.3
-            var req = (HttpWebRequest)WebRequest.Create(url);
-            req.UserAgent = "Harbor/" + SettingsWindow.Version + " (" + SettingsWindow.RepoUrl + ")";
-            req.Timeout = 6000;
-            req.ReadWriteTimeout = 6000;
-            // gzip only: .NET Framework misreads servers' "deflate" (zlib-wrapped) replies - Open-Meteo sends those
-            req.AutomaticDecompression = DecompressionMethods.GZip;
-            try
-            {
-                using (var resp = (HttpWebResponse)req.GetResponse())
-                using (var rd = new StreamReader(resp.GetResponseStream(), Encoding.UTF8))
-                {
-                    status = (int)resp.StatusCode;
-                    return rd.ReadToEnd();
-                }
-            }
-            catch (WebException ex)
-            {
-                var resp = ex.Response as HttpWebResponse;
-                status = resp != null ? (int)resp.StatusCode : 0;
-                if (resp != null) resp.Close();
-                return null;
-            }
-        }
     }
 }

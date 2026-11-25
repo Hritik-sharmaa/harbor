@@ -27,7 +27,7 @@ namespace Harbor
         public static bool Busy;
         public static event Action Changed;
 
-        static System.Windows.Forms.Timer every, remind;
+        static ITicker every, remind;
         static readonly HashSet<string> reminded = new HashSet<string>();
 
         public static bool Configured { get { return demo || Look.Get("CalendarUrls").Trim() != ""; } }
@@ -36,7 +36,7 @@ namespace Harbor
         {
             if (every == null)
             {
-                every = new System.Windows.Forms.Timer { Interval = 15 * 60 * 1000 };
+                every = Core.NewTicker(15 * 60 * 1000);
                 every.Tick += delegate { Refresh(); };
                 every.Start();
             }
@@ -74,10 +74,10 @@ namespace Harbor
                         if (ics == null || ics.IndexOf("BEGIN:VCALENDAR", StringComparison.Ordinal) < 0) { err = "Couldn't read a calendar (" + (status == 0 ? "no connection" : "error " + status) + ")"; continue; }
                         all.AddRange(Parse(ics, DateTime.Today.AddDays(-1), DateTime.Today.AddDays(8)));
                     }
-                    catch (Exception ex) { App.Log(ex); err = "Couldn't read a calendar"; }
+                    catch (Exception ex) { Core.Log(ex); err = "Couldn't read a calendar"; }
                 }
                 all.Sort((a, b) => a.Start.CompareTo(b.Start));
-                App.Post(() =>
+                Core.Post(() =>
                 {
                     Busy = false;
                     Error = err;
@@ -92,7 +92,7 @@ namespace Harbor
 
         static void ArmReminder()
         {
-            if (remind == null) { remind = new System.Windows.Forms.Timer(); remind.Tick += delegate { remind.Stop(); Remind(); }; }
+            if (remind == null) { remind = Core.NewTicker(); remind.Tick += delegate { remind.Stop(); Remind(); }; }
             remind.Stop();
             var now = DateTime.Now;
             foreach (var e in Events)
@@ -118,17 +118,17 @@ namespace Harbor
                 reminded.Add(Key(e));
                 var ev = e;
                 int mins = (int)Math.Max(0, Math.Round((e.Start - now).TotalMinutes));
-                LiveActivity.Show(new LiveActivity.Item
+                Core.Show(new Activity
                 {
                     Glyph = "", Title = e.Title, Detail = mins <= 0 ? "starting now" : "in " + mins + " min",
                     Tint = System.Drawing.Color.FromArgb(255, 255, 99, 99), Important = true, Ms = 12000,
-                    Action = e.Link != null ? "Join" : null, Click = () => { if (ev.Link != null) Launcher.Run(ev.Link); else Island.OpenTab("calendar"); },
+                    Action = e.Link != null ? "Join" : null, Click = () => { if (ev.Link != null) Core.Open(ev.Link); else Core.OpenTab("calendar"); },
                 });
             }
             ArmReminder();
         }
 
-        public static void Join(Event e) { if (e != null && e.Link != null) Launcher.Run(e.Link); }
+        public static void Join(Event e) { if (e != null && e.Link != null) Core.Open(e.Link); }
 
         // ------------------------------------------------------------------ iCalendar
 

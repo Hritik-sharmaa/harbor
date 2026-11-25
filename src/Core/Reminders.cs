@@ -21,7 +21,7 @@ namespace Harbor
         }
 
         static List<Item> items;
-        static System.Windows.Forms.Timer alarm;
+        static ITicker alarm;
         public static event Action Changed;
 
         static string FilePath { get { return Path.Combine(Settings.Dir, "reminders.tsv"); } }
@@ -89,7 +89,7 @@ namespace Harbor
         /// <summary>One timer, set for the next due reminder (at most an hour ahead, then it re-arms).</summary>
         static void Arm()
         {
-            if (alarm == null) { alarm = new System.Windows.Forms.Timer(); alarm.Tick += delegate { alarm.Stop(); Fire(); Arm(); }; }
+            if (alarm == null) { alarm = Core.NewTicker(); alarm.Tick += delegate { alarm.Stop(); Fire(); Arm(); }; }
             alarm.Stop();
             DateTime? next = null;
             foreach (var i in All) if (!i.Done && !i.Notified && i.Due.HasValue && (next == null || i.Due.Value < next.Value)) next = i.Due;
@@ -107,9 +107,9 @@ namespace Harbor
                 {
                     i.Notified = true;
                     any = true;
-                    Banners.ShowLocal("Reminder", i.Text, DueText(i));
+                    Core.Banner("Reminder", i.Text, DueText(i));
                 }
-            if (any) { try { System.Media.SystemSounds.Asterisk.Play(); } catch { } Save(); }
+            if (any) { try { Core.Play(Sound.Asterisk); } catch { } Save(); }
         }
 
         // ------------------------------------------------------------------ storage
@@ -132,7 +132,7 @@ namespace Harbor
                     items.Add(it);
                 }
             }
-            catch (Exception ex) { App.Log(ex); }
+            catch (Exception ex) { Core.Log(ex); }
         }
 
         static void Save()
@@ -151,7 +151,7 @@ namespace Harbor
                 Directory.CreateDirectory(Settings.Dir);
                 File.WriteAllText(FilePath, sb.ToString(), Encoding.UTF8);
             }
-            catch (Exception ex) { App.Log(ex); }
+            catch (Exception ex) { Core.Log(ex); }
             Arm();
             if (Changed != null) Changed();
         }

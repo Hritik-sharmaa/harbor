@@ -2,7 +2,6 @@ using System;
 using System.Collections.Generic;
 using System.Drawing;
 using System.IO;
-using Microsoft.Win32;
 
 namespace Harbor
 {
@@ -33,7 +32,7 @@ namespace Harbor
 
         public static string Dir
         {
-            get { return Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Harbor"); }
+            get { return Core.Platform.ConfigDir; }
         }
 
         static string FilePath { get { return Path.Combine(Dir, "settings.ini"); } }
@@ -157,43 +156,7 @@ namespace Harbor
         static int ToInt(string s, int d) { int v; return int.TryParse(s, out v) ? v : d; }
         static int Clamp(int v, int a, int b) { return v < a ? a : (v > b ? b : v); }
 
-        static List<string> DefaultPins()
-        {
-            var pins = new List<string>();
-            string win = Environment.GetFolderPath(Environment.SpecialFolder.Windows);
-            string pf = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFiles);
-            string pf86 = Environment.GetFolderPath(Environment.SpecialFolder.ProgramFilesX86);
-            string local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
-            string winApps = Path.Combine(local, @"Microsoft\WindowsApps");
-
-            pins.Add(Path.Combine(win, "explorer.exe"));
-            AddFirst(pins, Path.Combine(pf86, @"Microsoft\Edge\Application\msedge.exe"),
-                           Path.Combine(pf, @"Microsoft\Edge\Application\msedge.exe"));
-            AddFirst(pins, Path.Combine(pf, @"Google\Chrome\Application\chrome.exe"),
-                           Path.Combine(pf86, @"Google\Chrome\Application\chrome.exe"),
-                           Path.Combine(local, @"Google\Chrome\Application\chrome.exe"));
-            AddFirst(pins, Path.Combine(pf, @"Mozilla Firefox\firefox.exe"));
-            AddFirst(pins, Path.Combine(local, @"Programs\Microsoft VS Code\Code.exe"),
-                           Path.Combine(pf, @"Microsoft VS Code\Code.exe"));
-            if (File.Exists(Path.Combine(winApps, "wt.exe")))
-                pins.Add(@"shell:AppsFolder\Microsoft.WindowsTerminal_8wekyb3d8bbwe!App");
-            AddFirst(pins, Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), @"Spotify\Spotify.exe"));
-            if (Directory.Exists(Path.Combine(winApps, "Microsoft.WindowsNotepad_8wekyb3d8bbwe")))
-                pins.Add(@"shell:AppsFolder\Microsoft.WindowsNotepad_8wekyb3d8bbwe!App");
-            else
-                pins.Add(Path.Combine(win, "notepad.exe"));
-            pins.Add(@"shell:AppsFolder\Microsoft.WindowsCalculator_8wekyb3d8bbwe!App");
-            pins.Add(@"shell:AppsFolder\windows.immersivecontrolpanel_cw5n1h2txyewy!microsoft.windows.immersivecontrolpanel");
-
-            // drop AppsFolder entries that don't exist on this PC
-            pins.RemoveAll(p => p.StartsWith("shell:", StringComparison.OrdinalIgnoreCase) && !ShellIcons.Exists(p));
-            return pins;
-        }
-
-        static void AddFirst(List<string> pins, params string[] candidates)
-        {
-            foreach (var c in candidates) if (File.Exists(c)) { pins.Add(c); return; }
-        }
+        static List<string> DefaultPins() { return Core.Platform.DefaultPins(); }
     }
 
     static class Theme
@@ -208,18 +171,11 @@ namespace Harbor
             else
             {
                 Dark = true;
-                try
-                {
-                    using (var k = Registry.CurrentUser.OpenSubKey(@"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize"))
-                    {
-                        object v = k == null ? null : k.GetValue("SystemUsesLightTheme");
-                        if (v is int) Dark = (int)v == 0;
-                    }
-                }
+                try { Dark = Core.Platform.SystemPrefersDark(); }
                 catch { }
             }
             UserDark = Dark;
-            N.SetMenuTheme(Dark);
+            Core.Platform.ThemeApplied(Dark);
         }
 
         /// <summary>

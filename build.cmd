@@ -8,7 +8,7 @@ if not exist bin mkdir bin
 "%CSC%" /nologo /target:winexe /platform:anycpu /optimize+ /debug- /codepage:65001 /out:bin\Harbor.exe /win32manifest:app.manifest /win32icon:assets\Harbor.ico /resource:assets\Harbor.png,Harbor.png ^
   /r:System.dll /r:System.Drawing.dll /r:System.Windows.Forms.dll /r:System.Management.dll /r:System.Web.Extensions.dll /r:System.IO.Compression.dll /r:System.IO.Compression.FileSystem.dll /r:System.Runtime.dll /r:System.Runtime.InteropServices.WindowsRuntime.dll ^
   /r:%WINDIR%\System32\WinMetadata\Windows.Foundation.winmd /r:%WINDIR%\System32\WinMetadata\Windows.Media.winmd /r:%WINDIR%\System32\WinMetadata\Windows.Devices.winmd /r:%WINDIR%\System32\WinMetadata\Windows.Storage.winmd ^
-  /r:%WINDIR%\System32\WinMetadata\Windows.UI.winmd /r:%WINDIR%\System32\WinMetadata\Windows.ApplicationModel.winmd /r:%WINDIR%\System32\WinMetadata\Windows.Data.winmd src\*.cs
+  /r:%WINDIR%\System32\WinMetadata\Windows.UI.winmd /r:%WINDIR%\System32\WinMetadata\Windows.ApplicationModel.winmd /r:%WINDIR%\System32\WinMetadata\Windows.Data.winmd /recurse:src\*.cs
 if errorlevel 1 exit /b 1
 copy /y App.config bin\Harbor.exe.config >nul
 echo Built bin\Harbor.exe

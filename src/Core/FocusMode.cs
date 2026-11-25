@@ -50,7 +50,7 @@ namespace Harbor
             if (!finished && withPomodoro && Pomodoro.Current == Pomodoro.Phase.Work) Pomodoro.Reset();
             Fire();
             if (held > 0)
-                Banners.ShowLocal("Focus", finished ? "Focus session done" : "Focus ended",
+                Core.Banner("Focus", finished ? "Focus session done" : "Focus ended",
                     held + (held == 1 ? " notification" : " notifications") + " came in while you focused. They're in the Notification Center.");
             held = 0;
         }
@@ -74,7 +74,7 @@ namespace Harbor
 
         static void Fire()
         {
-            App.OnFocusChanged();
+            Core.Platform.FocusChanged();
             if (Changed != null) Changed();
         }
     }

@@ -3,7 +3,6 @@ using System.Collections.Generic;
 using System.Drawing;
 using System.Globalization;
 using System.IO;
-using System.Media;
 using System.Text;
 
 namespace Harbor
@@ -45,7 +44,7 @@ namespace Harbor
         public static readonly List<Clock> Clocks = new List<Clock>();
         public static event Action Changed;
 
-        static System.Windows.Forms.Timer tick, minute;
+        static ITicker tick, minute;
         static bool loaded;
 
         static string FilePath { get { return Path.Combine(Settings.Dir, "timers.tsv"); } }
@@ -205,10 +204,10 @@ namespace Harbor
         static void Arm()
         {
             bool counting = Running.Exists(c => !c.Paused);
-            if (counting && tick == null) { tick = new System.Windows.Forms.Timer { Interval = 1000 }; tick.Tick += delegate { Tick(); }; }
+            if (counting && tick == null) { tick = Core.NewTicker(1000); tick.Tick += delegate { Tick(); }; }
             if (tick != null) { if (counting) tick.Start(); else tick.Stop(); }
             bool alarms = Alarms.Exists(a => a.On);
-            if (alarms && minute == null) { minute = new System.Windows.Forms.Timer { Interval = 15000 }; minute.Tick += delegate { CheckAlarms(); }; }
+            if (alarms && minute == null) { minute = Core.NewTicker(15000); minute.Tick += delegate { CheckAlarms(); }; }
             if (minute != null) { if (alarms) minute.Start(); else minute.Stop(); }
         }
 
@@ -239,9 +238,9 @@ namespace Harbor
 
         static void Ring(string title, string detail, Action again, string againLabel)
         {
-            try { SystemSounds.Exclamation.Play(); } catch { }
-            LiveActivity.Show(new LiveActivity.Item { Glyph = "", Title = title, Detail = detail, Tint = Color.FromArgb(255, 255, 179, 64), Important = true, Ms = 10000, Action = againLabel, Click = again });
-            Banners.ShowLocal("Timer", title, detail);
+            try { Core.Play(Sound.Exclamation); } catch { }
+            Core.Show(new Activity { Glyph = "", Title = title, Detail = detail, Tint = Color.FromArgb(255, 255, 179, 64), Important = true, Ms = 10000, Action = againLabel, Click = again });
+            Core.Banner("Timer", title, detail);
         }
 
         // ------------------------------------------------------------------ saved
@@ -271,7 +270,7 @@ namespace Harbor
                     catch { }
                 }
             }
-            catch (Exception ex) { App.Log(ex); }
+            catch (Exception ex) { Core.Log(ex); }
         }
 
         static void Save()
@@ -290,7 +289,7 @@ namespace Harbor
                 Directory.CreateDirectory(Settings.Dir);
                 File.WriteAllText(FilePath, sb.ToString(), Encoding.UTF8);
             }
-            catch (Exception ex) { App.Log(ex); }
+            catch (Exception ex) { Core.Log(ex); }
         }
 
         static bool demo;

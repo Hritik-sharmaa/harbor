@@ -1,5 +1,4 @@
 using System;
-using System.Windows.Forms;
 
 namespace Harbor
 {
@@ -16,7 +15,7 @@ namespace Harbor
         public static bool Running;
         static TimeSpan remaining = Length(Phase.Work);
         static DateTime endsAt;
-        static Timer tick;
+        static ITicker tick;
         public static event Action Changed;
 
         public static TimeSpan Length(Phase p)
@@ -95,7 +94,7 @@ namespace Harbor
             if (remaining <= TimeSpan.Zero) remaining = Length(Current);
             endsAt = DateTime.Now + remaining;
             Running = true;
-            if (tick == null) { tick = new Timer { Interval = 1000 }; tick.Tick += delegate { Tick(); }; }
+            if (tick == null) { tick = Core.NewTicker(1000); tick.Tick += delegate { Tick(); }; }
             tick.Start();
             Fire();
         }
@@ -152,10 +151,10 @@ namespace Harbor
             if (finished)
             {
                 var focus = Focus;
-                Banners.ShowLocal("Pomodoro", done == Phase.Work ? "Time for a break" : "Break's over",
+                Core.Banner("Pomodoro", done == Phase.Work ? "Time for a break" : "Break's over",
                     done == Phase.Work ? Name(Current) + " · " + (int)Length(Current).TotalMinutes + " min. Nice work" + (focus != null ? " on \"" + focus.Text + "\"" : "") + "!"
                                        : "Ready for another " + (int)Length(Phase.Work).TotalMinutes + " minutes" + (focus != null ? " on \"" + focus.Text + "\"" : " of focus") + "?");
-                try { System.Media.SystemSounds.Asterisk.Play(); } catch { }
+                try { Core.Play(Sound.Asterisk); } catch { }
                 // breaks start on their own, like most Pomodoro apps; the next work session waits for you
                 if (Current != Phase.Work && wasRunning) Start();
             }
