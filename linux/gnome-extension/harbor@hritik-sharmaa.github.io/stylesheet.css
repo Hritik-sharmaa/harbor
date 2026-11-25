@@ -1,0 +1,78 @@
+/* Harbor for GNOME Shell. Colours, radius and padding of the dock come from harbord (Harbor → Dock settings). */
+
+.harbor-dock {
+  background-color: rgba(30, 30, 34, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 20px;
+  padding: 6px 8px 2px 8px;
+  spacing: 6px;
+  box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35);
+}
+
+.harbor-dock-item {
+  spacing: 3px;
+}
+
+.harbor-dock-dot {
+  width: 4px;
+  height: 4px;
+  border-radius: 2px;
+  background-color: rgba(235, 235, 235, 0.9);
+}
+
+.harbor-dock-item:focused .harbor-dock-dot {
+  background-color: #ffffff;
+}
+
+.harbor-dock-separator {
+  width: 1px;
+  height: 36px;
+  margin: 0 4px;
+  background-color: rgba(255, 255, 255, 0.28);
+}
+
+.harbor-dock-label {
+  background-color: rgba(44, 44, 48, 0.94);
+  color: #f2f2f2;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 8px;
+  padding: 4px 10px;
+  font-size: 10.5pt;
+}
+
+.harbor-pill {
+  background-color: #000000;
+  border-radius: 999px;
+  padding: 8px 10px 8px 12px;
+  spacing: 10px;
+  min-width: 260px;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+}
+
+.harbor-pill-icon {
+  icon-size: 22px;
+  color: #ffffff;
+}
+
+.harbor-pill-title {
+  color: #ffffff;
+  font-weight: bold;
+  font-size: 10.5pt;
+}
+
+.harbor-pill-detail {
+  color: rgba(255, 255, 255, 0.62);
+  font-size: 9.5pt;
+}
+
+.harbor-pill-action {
+  background-color: rgba(255, 255, 255, 0.16);
+  color: #ffffff;
+  border-radius: 999px;
+  padding: 4px 12px;
+  font-weight: bold;
+}
+
+.harbor-pill-action:hover {
+  background-color: rgba(255, 255, 255, 0.28);
+}

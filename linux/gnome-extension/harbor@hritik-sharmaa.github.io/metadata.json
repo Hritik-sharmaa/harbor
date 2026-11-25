@@ -1,0 +1,9 @@
+{
+  "uuid": "harbor@hritik-sharmaa.github.io",
+  "name": "Harbor",
+  "description": "A macOS-style dock for GNOME, with live activities for timers, reminders and meetings. Works with harbord (Harbor's helper) for reminders, timers, Pomodoro, weather and Claude usage; without it the dock uses your GNOME favourites.",
+  "version": 1,
+  "version-name": "0.4.2",
+  "shell-version": ["45", "46", "47", "48", "49"],
+  "url": "https://github.com/hritik-sharmaa/harbor"
+}
